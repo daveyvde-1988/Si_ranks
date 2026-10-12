@@ -1,5 +1,11 @@
 # Validation and installation — 12 October 2026
 
+## Current update: 1.2.1 initial commander lottery timing
+
+Release build passed with zero warnings/errors; **105 engine and 29 offline reward compatibility assertions passed**. Current installed SilicaCore was decompiled locally: `MP_Strategy.OnMissionStateChanged(STARTED)` invokes `OnGameStarted`, but `UpdateGameLoop` resolves the initial commander lottery afterward. The old one-shot start-event snapshot could therefore contain no winners. The fix finalizes the pending genuine-round award from a postfix on `ResolveCommanderLottery`, once the selected commanders are assigned. Starting FPS messages are delayed to the same boundary. A confirmed-start flag distinguishes genuine start from a mid-round bootstrap when suppressing duplicate start callbacks; pending state is cleared on stop/unload. Native method existence/order were inspected; patch execution and scoreboard synchronization still require gameplay testing.
+
+Old DLL/source/configuration backup: `Backups/FieldRanks-startscore-20261012-121238/`. No configuration changes or server start/stop were required. Relaunch the server normally and start a new round; initial human commanders should show tier 9 and +3,500 actual scoreboard points, with no second award after role changes.
+
 ## Current update: 1.2.0 earned final tier and starting commanders
 
 Release build passed with zero warnings/errors. **105 engine assertions and 29 offline reward compatibility assertions passed.** Added coverage for the 15,000 threshold, 20 cap, 85% ordinary payout, per-team exact final seat and seat release, maximum admin rank, legitimate starting commander score/rank, refusal for non-commanders, repeated grants/reconnect/penalty bypass prevention, immediate commander bonus, retained earned rank on role exit, fresh-round reset and all faction starting names. The installed DLL hash matched its Release artifact. Configuration checks confirmed the new final tier and starting commander settings while preserving all previous sixteen rank entries.

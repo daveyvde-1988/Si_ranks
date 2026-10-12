@@ -117,3 +117,4 @@ D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Te
 D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RewardPatchTests\Debug\net8.0\RewardPatchTests.pdb
 D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RewardPatchTests\Debug\net8.0\RewardPatchTests.genruntimeconfig.cache
 D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RewardPatchTests\Debug\net8.0\ref\RewardPatchTests.dll
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RewardPatchTests\Debug\net8.0\RewardPatchTests.sourcelink.json

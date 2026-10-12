@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 using SilicaAdminMod;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(SiPlayerRanks.RankMod), "Silica Field Ranks", "1.2.0", "Local")]
+[assembly: MelonInfo(typeof(SiPlayerRanks.RankMod), "Silica Field Ranks", "1.2.1", "Local")]
 [assembly: MelonGame("Bohemia Interactive", "Silica")]
 [assembly: MelonOptionalDependencies("Admin Mod", "Si_Formation")]
 
@@ -23,6 +23,7 @@ namespace SiPlayerRanks
         private static readonly FormationAdapter formation=new();
         private static readonly Dictionary<long,Player> playerInstances=new();
         private static bool active,awaitNewRound;
+        private static bool confirmedRoundStart,startingCommandersPending;
         private static int modeId;
         private static float startTime,lastGameTime,nextPoll,nextRoster;
         private static string initializationError="";
@@ -100,7 +101,7 @@ namespace SiPlayerRanks
         private static void Started(GameMode mode)
         {
             // Repeated notifications for the same running round must not award twice.
-            if(Ready&&mode.GetInstanceID()==modeId&&mode.GameTime+0.1f>=lastGameTime)return;
+            if(confirmedRoundStart&&Ready&&mode.GetInstanceID()==modeId&&mode.GameTime+0.1f>=lastGameTime)return;
             StartRound(mode,true);
         }
         private static void StartRound(GameMode mode,bool announceStartingRank)
@@ -108,36 +109,45 @@ namespace SiPlayerRanks
             if(engine==null||!Server)return;
             formation.ClearAll();engine.Reset();formation.ForgetApplications();playerInstances.Clear();
             awaitNewRound=false;active=true;modeId=mode.GetInstanceID();
+            confirmedRoundStart=announceStartingRank;startingCommandersPending=announceStartingRank;
             startTime=Time.realtimeSinceStartup;lastGameTime=mode.GameTime;
             nextPoll=startTime+(float)config.PollSeconds;nextRoster=0;
             foreach(var p in Player.Players.Where(p=>p).OrderBy(Id))
             {
                 Observe(p);
-                if(announceStartingRank&&p.Team&&!p.IsCommander&&engine.Round.Players.TryGetValue(Id(p),out var state))
-                {
-                    var rank=config.Ranks[0];
-                    Tell(Id(p),$"Starting rank: {rank.Display(state.Faction)}. Personal credits: +{rank.BonusPercent}%. Squad size: {rank.Squad} (including you).");
-                }
             }
             RefreshCommanders(!announceStartingRank);
-            if(announceStartingRank)
-            {
-                foreach(long id in engine.Round.Commanders.Values.Distinct().ToArray())
-                {
-                    var p=Player.Players.FirstOrDefault(p=>p&&Id(p)==id);
-                    if(!p)continue;
-                    Observe(p,false,true);
-                    if(engine.StartCommander(id,out int awardedScore))p.Score=awardedScore;
-                }
-            }
+            // Strategy's round-start event runs BEFORE its initial commander lottery.
+            // The native lottery postfix finalizes only this pending genuine start.
+            if(announceStartingRank&&!(mode is MP_Strategy))FinishStartingCommanders(mode);
             RankLog.Info("Round started: ranks, strikes, cooldowns, recovery, queues, seats and commander roles reset.");
+        }
+        private static void FinishStartingCommanders(GameMode mode)
+        {
+            if(!Ready||!startingCommandersPending||mode.GetInstanceID()!=modeId)return;
+            // Consume first: duplicate callbacks/reentrancy cannot grant a second award.
+            startingCommandersPending=false;
+            RefreshRoster(false,false);RefreshCommanders(false);
+            foreach(long id in engine!.Round.Commanders.Values.Distinct().ToArray())
+            {
+                var p=Player.Players.FirstOrDefault(p=>p&&Id(p)==id);
+                if(!p)continue;
+                Observe(p,false,true);
+                if(engine.StartCommander(id,out int awardedScore))p.Score=awardedScore;
+            }
+            foreach(var p in Player.Players.Where(p=>p&&p.Team&&!p.IsCommander).OrderBy(Id))
+            {
+                if(!engine.Round.Players.TryGetValue(Id(p),out var state))continue;
+                var rank=config.Ranks[0];
+                Tell(Id(p),$"Starting rank: {rank.Display(state.Faction)}. Personal credits: +{rank.BonusPercent}%. Squad size: {rank.Squad} (including you).");
+            }
         }
         private static void Ended(GameMode mode,Team winner)=>StopRound();
         private static void Restarted(GameMode mode)=>StopRound();
         private static void StopRound()
         {
             if(!Server)return;
-            active=false;engine?.Reset();formation.ClearAll();playerInstances.Clear();
+            active=false;confirmedRoundStart=false;startingCommandersPending=false;engine?.Reset();formation.ClearAll();playerInstances.Clear();
         }
         private static void Left(Player p)
         {if(Ready&&p&&Id(p)!=0){engine!.Disconnect(Id(p));RefreshCommanders();}}
@@ -148,7 +158,7 @@ namespace SiPlayerRanks
             Observe(p,false,true);engine!.Reconcile();RefreshCommanders();
         }
         private static void CommanderChanged(Team team,Player oldPlayer,Player newPlayer)
-        {if(Ready){RefreshRoster(false,false);RefreshCommanders();}}
+        {if(Ready){RefreshRoster(false,false);RefreshCommanders(!startingCommandersPending);}}
         private static void RefreshRoster(bool readScores,bool reconcile)
         {
             if(!Ready)return;
@@ -268,6 +278,11 @@ namespace SiPlayerRanks
             }
         }
         private sealed class KillState{public Player? Attacker;public short Kills;public bool FriendlyUnit;}
+        [HarmonyPatch(typeof(MP_Strategy),"ResolveCommanderLottery")]
+        private static class StartingCommanderLotteryPatch
+        {
+            private static void Postfix(MP_Strategy __instance)=>FinishStartingCommanders(__instance);
+        }
         [HarmonyPatch(typeof(Player),nameof(Player.OnTargetDestroyed))]
         private static class TeamkillPatch
         {
@@ -289,7 +304,7 @@ namespace SiPlayerRanks
         }
         public override void OnDeinitializeMelon()
         {
-            active=false;formation.ClearAll();RewardPatches.Unbind(HarmonyInstance);
+            active=false;confirmedRoundStart=false;startingCommandersPending=false;formation.ClearAll();RewardPatches.Unbind(HarmonyInstance);
             GameEvents.OnGameStarted-=Started;GameEvents.OnGameEnded-=Ended;GameEvents.OnGameRestart-=Restarted;
             GameEvents.OnCommanderChanged-=CommanderChanged;GameEvents.OnPlayerChangedTeam-=TeamChanged;
             GameEvents.OnPlayerLeft-=Left;GameEvents.OnPlayerDeleted-=Left;

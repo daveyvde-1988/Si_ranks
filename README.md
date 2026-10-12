@@ -1,6 +1,6 @@
 # Silica Field Ranks
 
-**Version 1.2.0 - server-side Silica player ranks, compiled as `Si_Ranks.dll`.**
+**Version 1.2.1 - server-side Silica player ranks, compiled as `Si_Ranks.dll`.**
 
 Players progress through a shared rank ladder using their authoritative current-round game score. Faction-specific names, personal-credit bonuses and FPS squad permissions follow that rank. Progress, penalties and limited seats reset every round; there is no career score.
 
@@ -50,6 +50,8 @@ At genuine round start, each active RTS commander receives:
 - **Chief Master Sergeant** for SOL, **Sergeant Major** for Centauri, or **Brood Warden** for Alien: normal tier 9.
 - **+3,500 actual scoreboard points**, once per account per round.
 - **85% extra eligible personal credits while commanding**: `base * 1.85`, replacing the ordinary rank bonus.
+
+Version 1.2.1 fixes native start ordering: `OnGameStarted` fires before Strategy resolves its initial commander lottery. The rank reset arms a pending starting award; a server-side postfix on `MP_Strategy.ResolveCommanderLottery` awards the selected initial commanders immediately after the lottery returns. It consumes that pending award once. FPS starting-rank announcements also wait until commander selection is complete. Mid-round bootstrap, duplicate callbacks and subsequent commander replacements do not trigger this award.
 
 There is no honorary title or twenty-second appointment delay. Commanders progress through the same score thresholds and exact-rank seat queues as FPS players, and receive private promotion and queue messages. Promotions display the earned rank and the active commander bonus. Starting as commander does not claim the final Field Marshal/Hive Mind seat.
 
@@ -186,7 +188,7 @@ dotnet run --project Tests/RankEngineTests.csproj
 dotnet run --project Tests/RewardPatchTests.csproj "-p:ServerRoot=D:\SteamLibrary\steamapps\common\Silica Dedicated Server" -- "D:\SteamLibrary\steamapps\common\Silica Dedicated Server"
 ```
 
-Version 1.2.0 built with zero warnings/errors. **105 engine assertions and 29 offline reward compatibility assertions passed.** The reward harness inspects raw IL from installed DLLs; it does not execute game methods or validate Unity/Mono patch installation. Recorded checks and limitations are in [VALIDATION.md](VALIDATION.md).
+Version 1.2.1 built with zero warnings/errors. **105 engine assertions and 29 offline reward compatibility assertions passed.** The reward harness inspects raw IL from installed DLLs; it does not execute game methods or validate Unity/Mono patch installation. Recorded checks and limitations are in [VALIDATION.md](VALIDATION.md).
 
 Gameplay verification remains user-owned: check startup patch/policy status with `/rank`, commander starting score and names, promotion messages and queues, final-seat exclusivity, rewards/announcements, Traitor reductions, recruitment restrictions and admin overrides, round resets, team switches and reconnect recovery.
 
