@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RewardPatchTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+138b88e05e4c84596ba65fbb238bd0867156aa4b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c5597461e51d8bc5fdf673cc64aaa1ae344e1a68")]
 [assembly: System.Reflection.AssemblyProductAttribute("RewardPatchTests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RewardPatchTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

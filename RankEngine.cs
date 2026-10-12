@@ -8,6 +8,14 @@ namespace SiPlayerRanks
     public enum UnitCategories { None = 0, Infantry = 1, Light = 2, Heavy = 4, Air = 8, Siege = 16, Other = 32, Any = 63 }
     public enum RewardKind { Kill, Structure, Logistics, Other }
     public enum Faction { Sol, Centauri, Alien }
+    public sealed class RankSoundConfig
+    {
+        public bool Enabled = true;
+        public string Tier1To4 = "Promotion_1.wav", Tier5To9 = "Promotion_2.wav", Tier10To14 = "Promotion_3.wav", Tier15To16 = "Promotion_4.wav";
+        public string Demotion = "TK_1.wav", Traitor = "TK_2.wav";
+        public string Promotion(int tier) => tier < 1 ? "" : tier <= 4 ? Tier1To4 : tier <= 9 ? Tier5To9 : tier <= 14 ? Tier10To14 : Tier15To16;
+        public IEnumerable<string> Files() => new[] { Tier1To4, Tier5To9, Tier10To14, Tier15To16, Demotion, Traitor };
+    }
     public sealed class RankDefinition
     {
         public string Name = "", CentauriName = "", AlienName = "";
@@ -24,7 +32,11 @@ namespace SiPlayerRanks
         public bool Debug = false;
         public double PollSeconds = 30, TeamkillCooldownSeconds = 10;
         public int StartingCommanderRank = 9, StartingCommanderScore = 3500;
-        public int CommanderBonusPercent = 85, TraitorOtherBonusPercent = -25;
+        public int TraitorOtherBonusPercent = -25;
+        public RankSoundConfig Sounds = new RankSoundConfig();
+        public static readonly string[] ForbiddenRecruitObjects = {
+            "ObjectInfo_Sol_HoverHarvester", "ObjectInfo_Cent_HeavyHarvester", "ObjectInfo_Cent_HeavyHarvester_Intro", "ObjectInfo_Alien_Shrimp"
+        };
         // Declared rank mapping over verified native definitions (not editor labels).
         public Dictionary<string, string[]> NativeCategoryRules = DefaultNativeRules();
         public Dictionary<string, UnitCategories> NativeObjectCategoryOverrides = new Dictionary<string, UnitCategories> {
@@ -36,8 +48,8 @@ namespace SiPlayerRanks
         {
             return new Dictionary<string, string[]> {
                 { "Infantry", new[] { "Infantry" } },
-                { "Light", new[] { "Cavalry", "Special:Light" } },
-                { "Heavy", new[] { "Tank", "Transport", "Harvester", "Special", "Repair" } },
+                { "Light", new[] { "Cavalry", "Special:Light", "Transport", "Repair" } },
+                { "Heavy", new[] { "Tank", "Special" } },
                 { "Air", new[] { "Aircraft" } }, { "Siege", new[] { "Siege" } }, { "Other", new[] { "None" } }
             };
         }
@@ -61,7 +73,9 @@ namespace SiPlayerRanks
         {
             if (!Finite(PollSeconds) || PollSeconds < 1 || PollSeconds > 3600 || !Finite(TeamkillCooldownSeconds) || TeamkillCooldownSeconds < 0 || TeamkillCooldownSeconds > 3600)
                 throw new ArgumentException("Invalid polling or teamkill cooldown.");
-            if (CommanderBonusPercent < 0 || CommanderBonusPercent > 1000 || TraitorOtherBonusPercent < -100 || TraitorOtherBonusPercent > 0) throw new ArgumentException("Invalid reward modifiers.");
+            if (TraitorOtherBonusPercent < -100 || TraitorOtherBonusPercent > 0) throw new ArgumentException("Invalid reward modifiers.");
+            if (Sounds == null || Sounds.Files().Any(s => s == null || (s.Length > 0 && (s.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 || s.Any(char.IsControl) || !s.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)))))
+                throw new ArgumentException("Invalid sound filenames; use WAV basenames in UserData/sounds.");
             if (Ranks == null || Ranks.Length != 17) throw new ArgumentException("Exactly seventeen rank tiers are required.");
             if (NativeCategoryRules == null || new[] { "Infantry", "Light", "Heavy", "Air", "Siege", "Other" }.Any(k => !NativeCategoryRules.ContainsKey(k)) || NativeCategoryRules.Any(p => p.Value == null || p.Value.Any(r => !ValidNativeRule(r))))
                 throw new ArgumentException("Invalid native category rules.");
@@ -102,11 +116,11 @@ namespace SiPlayerRanks
     }
     public sealed class Privileges
     {
-        public int Squad = 1, RankBonus, CommanderBonus, TraitorOtherBonus = -25;
+        public int Squad = 1, RankBonus, TraitorOtherBonus = -25;
         public UnitCategories Categories;
         public string[] ExcludedObjectInfoNames = new string[0];
         public bool Traitor, Commander;
-        public decimal Multiplier(RewardKind kind) => Traitor ? (kind == RewardKind.Kill || kind == RewardKind.Structure ? 0m : 1m + TraitorOtherBonus / 100m) : 1m + (Commander ? CommanderBonus : RankBonus) / 100m;
+        public decimal Multiplier(RewardKind kind) => Traitor ? (kind == RewardKind.Kill || kind == RewardKind.Structure ? 0m : 1m + TraitorOtherBonus / 100m) : 1m + RankBonus / 100m;
     }
     public sealed class RankEngine
     {
@@ -114,6 +128,8 @@ namespace SiPlayerRanks
         public RoundState Round { get; private set; } = new RoundState();
         public event Action<long, string>? Message;
         public event Action<long, Privileges>? PolicyChanged;
+        public event Action<long, string>? SoundRequested;
+        public event Action<string>? GlobalMessage;
         public RankEngine(RankConfig config) { config.Validate(); Config = config; }
         public void Reset() { var ids = Round.Players.Keys.ToArray(); Round = new RoundState(); foreach (var id in ids) PolicyChanged?.Invoke(id, new Privileges { Squad = Config.Ranks[0].Squad, Categories = Config.Ranks[0].Categories }); }
         public void Restore(RoundState data)
@@ -136,7 +152,7 @@ namespace SiPlayerRanks
             {
                 bool penalty = s.Team >= 0 && team >= 0;
                 RemoveAppointment(id); s.Team = team; s.ThresholdOrder.Clear(); s.QueueNotice = "";
-                if (penalty && s.Rank >= 0) { int old = s.Rank; s.Rank = Math.Max(0, s.Rank - 5); FitDemotedSeat(s); Rebase(s); Message?.Invoke(id, "Team changed: demoted " + (old - s.Rank) + " positions to " + Title(s) + ". Earn additional score to recover."); }
+                if (penalty && s.Rank >= 0) { int old = s.Rank; s.Rank = Math.Max(0, s.Rank - 5); FitDemotedSeat(s); Rebase(s); Message?.Invoke(id, "Team changed: demoted " + (old - s.Rank) + " positions to " + Title(s) + ". Earn additional score to recover."); if (s.Rank < old) Cue(s, Config.Sounds.Demotion); }
                 Notify(s);
             }
 
@@ -165,7 +181,7 @@ namespace SiPlayerRanks
                         s.ThresholdOrder[r] = batch;
                 }
             }
-            var changed = new Dictionary<long, RankState>(); bool progress;
+            var changed = new Dictionary<long, RankState>(); var previousRanks = new Dictionary<long, int>(); bool progress;
             do
             {
                 progress = false;
@@ -178,6 +194,7 @@ namespace SiPlayerRanks
                     foreach (var s in candidates)
                     {
                         if (!SeatFree(s.Team, next, s.Id)) continue;
+                        if (!previousRanks.ContainsKey(s.Id)) previousRanks[s.Id] = s.Rank;
                         s.Rank = next;
                         s.QueueNotice = "";
                         changed[s.Id] = s;
@@ -188,7 +205,8 @@ namespace SiPlayerRanks
             foreach (var s in changed.Values)
             {
                 var r = Config.Ranks[s.Rank];
-                Message?.Invoke(s.Id, "Promoted to " + Title(s) + "! Personal credits: +" + (Policy(s.Id).Commander ? Config.CommanderBonusPercent : r.BonusPercent) + "%. Squad size: " + Policy(s.Id).Squad + ".");
+                Message?.Invoke(s.Id, "Promoted to " + Title(s) + "! Personal credits: +" + r.BonusPercent + "%. Squad size: " + Policy(s.Id).Squad + ".");
+                Promoted(s, previousRanks[s.Id]);
                 Notify(s);
             }
             foreach (var s in Round.Players.Values)
@@ -250,6 +268,7 @@ namespace SiPlayerRanks
                 s.HasRecovery = false;
                 s.ThresholdOrder.Clear();
                 Message?.Invoke(s.Id, reason + ": " + Title(s) + ". Promotions locked until next round.");
+                Cue(s, Config.Sounds.Traitor);
             }
             else
             {
@@ -257,6 +276,7 @@ namespace SiPlayerRanks
                 FitDemotedSeat(s);
                 Rebase(s);
                 Message?.Invoke(s.Id, reason + ": demoted to " + Title(s) + ". Next promotion requires additional score.");
+                Cue(s, Config.Sounds.Demotion);
             }
             Notify(s);
             Reconcile();
@@ -267,7 +287,8 @@ namespace SiPlayerRanks
             if (s.Rank < 0) { error = "Traitor promotions are locked for this round."; return false; }
             if (s.Rank >= Config.Ranks.Length - 1 || s.Team < 0) { error = "Player cannot be promoted in the current state."; return false; }
             int next = s.Rank + 1; if (!SeatFree(s.Team, next, id)) { error = "The requested rank seat is occupied."; return false; }
-            s.Rank = next; Rebase(s); Message?.Invoke(id, "Admin promotion: " + Title(s) + "."); Notify(s); Reconcile(); return true;
+            int oldRank = s.Rank;
+            s.Rank = next; Rebase(s); Message?.Invoke(id, "Admin promotion: " + Title(s) + "."); Promoted(s, oldRank); Notify(s); Reconcile(); return true;
         }
         public bool AdminDemote(long id, int scoreAfter, out string error)
         {
@@ -284,29 +305,37 @@ namespace SiPlayerRanks
             s.Score = (int)Math.Min(int.MaxValue, (long)s.Score + Config.StartingCommanderScore);
             s.Rank = Math.Max(s.Rank, Config.StartingCommanderRank);
             s.ThresholdOrder.Clear();scoreAfter = s.Score;
-            Message?.Invoke(id, "Starting commander rank: " + Title(s) + ". Round score: +" + Config.StartingCommanderScore + ". Personal credits: +" + Config.CommanderBonusPercent + "% while commanding.");
+            Message?.Invoke(id, "Starting commander rank: " + Title(s) + ". Round score: +" + Config.StartingCommanderScore + ". Personal credits: +" + Config.Ranks[s.Rank].BonusPercent + "%.");
+            Cue(s, Config.Sounds.Promotion(s.Rank));
             Notify(s);return true;
         }
         public void SetCommanders(IDictionary<int, long> active, bool announceChanges = true)
         {
             var desired = active;
-            foreach (var old in Round.Commanders.ToArray()) if (!desired.TryGetValue(old.Key, out var id) || id != old.Value || !Round.Players.TryGetValue(id, out var current) || !current.Online || current.Team != old.Key) { Round.Commanders.Remove(old.Key); if (announceChanges) Message?.Invoke(old.Value, "Commander role ended; normal rank rewards restored."); if (Round.Players.TryGetValue(old.Value, out var s)) Notify(s); }
-            foreach (var pair in desired) if (Round.Players.TryGetValue(pair.Value, out var s) && s.Online && s.Team == pair.Key && (!Round.Commanders.TryGetValue(pair.Key, out var old) || old != pair.Value)) { Round.Commanders[pair.Key] = pair.Value; if (announceChanges) Message?.Invoke(pair.Value, "Commander role active; normal rank: " + Title(s) + ". Personal resources: +" + Config.CommanderBonusPercent + "%; no AI followers while commanding."); Notify(s); }
+            foreach (var old in Round.Commanders.ToArray()) if (!desired.TryGetValue(old.Key, out var id) || id != old.Value || !Round.Players.TryGetValue(id, out var current) || !current.Online || current.Team != old.Key) { Round.Commanders.Remove(old.Key); if (announceChanges) Message?.Invoke(old.Value, "Commander role ended; earned rank and reward bonus retained."); if (Round.Players.TryGetValue(old.Value, out var s)) Notify(s); }
+            foreach (var pair in desired) if (Round.Players.TryGetValue(pair.Value, out var s) && s.Online && s.Team == pair.Key && (!Round.Commanders.TryGetValue(pair.Key, out var old) || old != pair.Value)) { Round.Commanders[pair.Key] = pair.Value; if (announceChanges) Message?.Invoke(pair.Value, "Commander role active; normal rank: " + Title(s) + ". Personal resources: +" + (s.Rank >= 0 ? Config.Ranks[s.Rank].BonusPercent.ToString() + "%" : "Traitor restrictions") + "; no AI followers while commanding."); Notify(s); }
         }
         public Privileges Policy(long id)
         {
             var p = new Privileges { TraitorOtherBonus = Config.TraitorOtherBonusPercent }; if (!Round.Players.TryGetValue(id, out var s)) return p;
-            p.Traitor = s.Rank < 0; p.Commander = Round.Commanders.Values.Contains(id); p.CommanderBonus = p.Commander ? Config.CommanderBonusPercent : 0;
-            if (s.Rank >= 0) { var r = Config.Ranks[s.Rank]; p.RankBonus = r.BonusPercent; if (!p.Commander) { p.Squad = r.Squad; p.Categories = r.Categories; p.ExcludedObjectInfoNames = r.ExcludedObjectInfoNames; } }
+            p.Traitor = s.Rank < 0; p.Commander = Round.Commanders.Values.Contains(id); p.ExcludedObjectInfoNames = RankConfig.ForbiddenRecruitObjects;
+            if (s.Rank >= 0) { var r = Config.Ranks[s.Rank]; p.RankBonus = r.BonusPercent; if (!p.Commander) { p.Squad = r.Squad; p.Categories = r.Categories; p.ExcludedObjectInfoNames = r.ExcludedObjectInfoNames.Concat(RankConfig.ForbiddenRecruitObjects).Distinct().ToArray(); } }
             return p;
         }
         private string Title(RankState s) => s.Rank < 0 ? (s.Faction == Faction.Alien ? "Outcast" : s.Faction == Faction.Centauri ? "Deserter" : "Traitor") : Config.Ranks[s.Rank].Display(s.Faction);
+        private void Cue(RankState s, string file) { if (Config.Sounds.Enabled && file != "") SoundRequested?.Invoke(s.Id, file); }
+        private void Promoted(RankState s, int previousRank)
+        {
+            Cue(s, Config.Sounds.Promotion(s.Rank));
+            for (int tier = Math.Max(previousRank + 1, 15); tier <= s.Rank; tier++)
+                GlobalMessage?.Invoke(Plain(s.Name) + " just achieved " + Plain(Config.Ranks[tier].Display(s.Faction)) + " !!");
+        }
         private void Notify(RankState s) => PolicyChanged?.Invoke(s.Id, Policy(s.Id));
         public string Describe(long id)
         {
             var s = Round.Players[id]; var p = Policy(id);
             string allowed = p.Categories.ToString();
-            if (p.ExcludedObjectInfoNames.Length > 0) allowed += " except " + string.Join(" and ", p.ExcludedObjectInfoNames.Select(UnitLabel));
+            if (p.Categories != UnitCategories.None && p.ExcludedObjectInfoNames.Length > 0) allowed += " except " + string.Join(" and ", p.ExcludedObjectInfoNames.Select(UnitLabel));
             return Plain(s.Name) + ": " + Title(s) + "; team: " + Plain(s.TeamName) + "; round score: " + s.Score + "; personal resources: " + (p.Traitor ? "combat 0%, other " + (p.Multiplier(RewardKind.Other) * 100) + "%" : (p.Multiplier(RewardKind.Other) * 100) + "% of base") + "; allowed units: " + allowed + "; FPS squad limit: " + p.Squad + (p.Commander ? "; role: RTS commander" : "") + ".";
         }
         private static string UnitLabel(string name) => name == "ObjectInfo_Sol_UltraHeavy_SiegeTank" ? "Siege Tank" : name == "ObjectInfo_Cent_UltraHeavy_CrimsonTank" ? "Crimson Tank" : Plain(name);

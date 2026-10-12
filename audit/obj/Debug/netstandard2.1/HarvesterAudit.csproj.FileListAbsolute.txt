@@ -1,0 +1,11 @@
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\obj\Debug\netstandard2.1\HarvesterAudit.csproj.AssemblyReference.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\obj\Debug\netstandard2.1\HarvesterAudit.GeneratedMSBuildEditorConfig.editorconfig
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\obj\Debug\netstandard2.1\HarvesterAudit.AssemblyInfoInputs.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\obj\Debug\netstandard2.1\HarvesterAudit.AssemblyInfo.cs
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\obj\Debug\netstandard2.1\HarvesterAudit.csproj.CoreCompileInputs.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\obj\Debug\netstandard2.1\HarvesterAudit.sourcelink.json
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\bin\Debug\netstandard2.1\HarvesterAudit.deps.json
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\bin\Debug\netstandard2.1\HarvesterAudit.dll
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\bin\Debug\netstandard2.1\HarvesterAudit.pdb
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\obj\Debug\netstandard2.1\HarvesterAudit.dll
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\audit\obj\Debug\netstandard2.1\HarvesterAudit.pdb

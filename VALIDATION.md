@@ -1,4 +1,14 @@
-# Validation and installation — 12 October 2026
+# Validation and installation — 13 October 2026
+
+## Current update: 1.3.0 rank rewards, unit bans, announcements and sounds
+
+Release build passed with zero warnings/errors. **135 engine assertions and 31 offline reward compatibility assertions passed.** Added engine coverage for commander tier bonuses, all-tier harvester exclusions, native category changes, grouped sound selection, one cue per aggregate promotion, no repeated cues for unchanged/ignored state, Traitor precedence, top-tier global announcements, disabled cues and filename validation. The current Logistics DLL changed since the original integration; its PayDueRewards/TryGrant source and payout/chat IL were re-inspected and confirmed compatible before updating the reviewed hash.
+
+All six actual WAV files passed offline decoder/playback-harness checks: PCM conversion/padding, invalid-file rejection, recipient-only queueing and reset cancellation. This verifies data handling, not audible game playback. Direct-control, alien takeover, boarding, setter assignment and FPS recruitment entry points were inspected against installed game/Admin Mod assemblies; no game methods or live server were executed for verification. Build and offline checks do not prove client prediction correction or sound delivery in game.
+
+Old DLL/source/configuration backup: `Backups/FieldRanks-sounds-20261013-010652/`. Updated installed rank configuration to remove the commander-only reward bonus, move Transport/Repair to Light, remove Harvester from Heavy, and enable the six sound mappings. The actual Traitor sound filename is TK_2.wav. All mod-owned logging remains behind /debug. No other mod source, DLL or settings were changed and the server was not started/stopped.
+
+User gameplay checks: commander tier9 pays +24%, then later rank percentages; tier15/16 global achievement messages; private cues in FPS and RTS; demotion/Traitor cue separation and splash cooldown; Light transport/repair recruitment with airborne transport exceptions preserved; Harvester/Shrimp control/recruitment denial including admin overrides, human boarding and Alien takeover; unchanged RTS AI harvesting/purchases; real Logistics balances/messages after its compatible DLL hash update.
 
 ## Current update: 1.2.1 initial commander lottery timing
 

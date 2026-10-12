@@ -70,7 +70,7 @@ internal static class RewardPatchProgram
             return null;
         };
         Check(RewardPatches.Calculate(100,1.5m,0)==150,"Colonel 50 percent");
-        Check(RewardPatches.Calculate(100,1.85m,0)==185,"commander replacement bonus");
+        Check(RewardPatches.Calculate(100,1.85m,0)==185,"configured multiplier arithmetic");
         Check(RewardPatches.Calculate(100,0m,0)==0,"Traitor combat cancellation");
         Check(RewardPatches.Calculate(100,.75m,0)==75,"Traitor logistics reduction");
         Check(RewardPatches.Calculate(1,.75m,0)==0,"fractional final award floors");
@@ -94,6 +94,10 @@ internal static class RewardPatchProgram
         Check(modified.Count(c=>c.Calls(add))==1,"external single original payment");
         Check(modified.FindIndex(c=>c.operand is MethodInfo m&&m.Name=="External")>modified.FindIndex(c=>c.opcode==OpCodes.Ret),"external modifier after early validation return");
         var logistics=Assembly.LoadFrom(Path.Combine(root,"Mods/Si_Logistics.dll")).GetType("Si_Logistics.LogisticsMod")!;
+        string reviewedHash=(string)typeof(RewardPatches).GetField("LogisticsHash",BindingFlags.Static|BindingFlags.NonPublic)!.GetRawConstantValue()!;
+        var verify=Get(typeof(RewardPatches),"Verified");
+        Check((bool)verify.Invoke(null,new object[]{logistics.Assembly,reviewedHash})!,"current installed Logistics passes reviewed DLL hash gate");
+        Check(!(bool)verify.Invoke(null,new object[]{logistics.Assembly,new string('0',64)})!,"unexpected Logistics DLL hash rejected");
         var grant=Get(logistics.GetNestedType("KohCredits",BindingFlags.NonPublic)!,"TryGrant");Field("logisticsGrant",grant);
         var due=Get(logistics,"PayDueRewards");var originalDue=Read(due);
         var modifiedDue=RewardPatches.LogisticsChatTranspiler(originalDue,due).ToList();

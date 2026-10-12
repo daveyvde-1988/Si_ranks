@@ -18,7 +18,9 @@ namespace SiPlayerRanks
     internal static class RewardPatches
     {
         private const string KohHash="5377B71A034E065DF76D5A3F595DE733DAF24D9A875DEF9D0C092BCCAAABF8BC";
-        private const string LogisticsHash="B6A363CF4CADCBED16C1F65B7F403D8BED65D0CE5B7B2679F82E35B5F32AAAF5";
+        // Reviewed installed Logistics 2026-10-13: TryGrant and PayDueRewards remain source
+        // identical to the previous reviewed build; grant and announcement IL sites unchanged.
+        private const string LogisticsHash="C5799FD0CDB2D1B5330CD165FDC5F5088118565E4D51712A06B17C586BFF3329";
         private const string LogisticsReason="Logistics rewards (batched)";
         private static MethodInfo? addCredits,getCredits,logisticsGrant;
         private static readonly HashSet<MethodBase> installed=new();

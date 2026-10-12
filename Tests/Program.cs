@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SiPlayerRanks;
 
 static class Program
@@ -38,7 +39,7 @@ static class Program
         e.SetCommanders(new Dictionary<int, long> { { 1, 1 } }); Check(e.Policy(1).Multiplier(RewardKind.Logistics) == 0.75m, "traitor overrides commander");
         e.Reset(); e.Observe(1, "P", 0, "SOL", 0); Check(e.Round.Players[1].Rank == 0 && e.Round.Players[1].Strikes == 0, "round clears penalties");
         e.Observe(1, "P", 0, "SOL", 12000); Check(e.Policy(1).Multiplier(RewardKind.Other) == 1.50m, "normal Colonel bonus before commander role");
-        e.SetCommanders(new Dictionary<int, long> { { 0, 1 } }); Check(e.Policy(1).Multiplier(RewardKind.Other) == 1.85m && e.Policy(1).Squad == 1 && e.Round.Players[1].Rank == 15, "commander replaces bonus and preserves rank");
+        e.SetCommanders(new Dictionary<int, long> { { 0, 1 } }); Check(e.Policy(1).Multiplier(RewardKind.Other) == 1.50m && e.Policy(1).Squad == 1 && e.Round.Players[1].Rank == 15, "commander receives earned rank bonus and preserves rank");
         e.SetCommanders(new Dictionary<int, long>()); Check(e.Policy(1).Multiplier(RewardKind.Other) == 1.50m, "commander restores rank bonus");
         e.AdminDemote(1, 12000, out _); Check(e.Round.Players[1].Rank == 14 && e.Round.Players[1].Strikes == 0, "admin demote no strike"); e.Reconcile(); Check(e.Round.Players[1].Rank == 14, "admin demote survives poll");
         e = Engine(); e.Observe(1, "P", 0, "SOL", 0); e.AdminPromote(1, out _); e.Reconcile(); Check(e.Round.Players[1].Rank == 1, "admin promo survives poll");
@@ -78,15 +79,33 @@ static class Program
         e.AdminDemote(1,15000,out _);Check(e.Round.Players[2].Rank==16&&e.Round.Players[1].Rank==14,"final demotion frees seat and protects occupied Colonel");
         e=Engine();e.Observe(1,"Starter",0,"SOL",0);Check(!e.StartCommander(1,out _),"noncommander cannot claim starting award");
         e.SetCommanders(new Dictionary<int,long>{{0,1}},false);Check(e.StartCommander(1,out int award)&&award==3500&&e.Round.Players[1].Rank==9,"commander starts at tier9 and gains real score");
-        Check(e.Describe(1).Contains("Chief Master Sergeant")&&!e.Describe(1).Contains("Field Marshal")&&e.Policy(1).Multiplier(RewardKind.Other)==1.85m,"commander uses actual starting rank and active role bonus");
+        Check(e.Describe(1).Contains("Chief Master Sergeant")&&!e.Describe(1).Contains("Field Marshal")&&e.Policy(1).Multiplier(RewardKind.Other)==1.24m,"commander uses actual starting rank and active role bonus");
         Check(!e.StartCommander(1,out _)&&e.Round.Players[1].Score==3500,"starting score award occurs once");
-        e.Observe(1,"Starter",0,"SOL",4000);Check(e.Round.Players[1].Rank==10&&e.Policy(1).Multiplier(RewardKind.Other)==1.85m,"commander progresses normally without losing role bonus");
+        e.Observe(1,"Starter",0,"SOL",4000);Check(e.Round.Players[1].Rank==10&&e.Policy(1).Multiplier(RewardKind.Other)==1.27m,"commander progresses and receives next rank bonus");
         e.Disconnect(1);e.Observe(1,"Starter",0,"SOL",0);e.SetCommanders(new Dictionary<int,long>{{0,1}});Check(!e.StartCommander(1,out _),"reconnect cannot claim commander award twice");
         e.SetCommanders(new Dictionary<int,long>());Check(e.Policy(1).Squad==11&&e.Policy(1).Multiplier(RewardKind.Other)==1.27m,"leaving command restores earned rank privileges");
         e.Reset();e.Observe(1,"Starter",0,"Alien",0);e.SetCommanders(new Dictionary<int,long>{{0,1}});Check(e.StartCommander(1,out award)&&e.Describe(1).Contains("Brood Warden"),"new round permits fresh starting award and Alien title");
         e=Engine();e.Observe(1,"Starter",0,"Centauri",0);e.SetCommanders(new Dictionary<int,long>{{0,1}});e.StartCommander(1,out _);Check(e.Describe(1).Contains("Sergeant Major"),"Centauri commander starting title");
         e.Teamkill(1,3500,0);Check(!e.StartCommander(1,out _),"penalty cannot be undone by repeating commander start");
         Reject(()=>new RankEngine(new RankConfig{StartingCommanderRank=16}),"limited starting commander rank rejected");
+        e=Engine();var sounds=new List<string>();var announcements=new List<string>();
+        e.SoundRequested+=(id,file)=>sounds.Add(id+":"+file);e.GlobalMessage+=announcements.Add;
+        e.Observe(1,"Ace",0,"SOL",1000);Check(sounds.Count==1&&sounds[0]=="1:Promotion_1.wav","multi-step low promotion emits one final-tier cue");
+        e.Reconcile();Check(sounds.Count==1&&announcements.Count==0,"unchanged rank has no repeat cue or global announcement");
+        e.Observe(1,"Ace",0,"SOL",3500);Check(sounds[sounds.Count-1]=="1:Promotion_2.wav","sergeant cue");
+        e.Observe(1,"Ace",0,"SOL",9000);Check(sounds[sounds.Count-1]=="1:Promotion_3.wav"&&announcements.Count==0,"officer cue without top announcement");
+        e.Observe(1,"Ace",0,"SOL",15000);Check(sounds[sounds.Count-1]=="1:Promotion_4.wav"&&announcements.Count==2,"top tiers announce both genuine crossings with one private cue");
+        Check(announcements[0]=="Ace just achieved Colonel !!"&&announcements[1]=="Ace just achieved Field Marshal !!","global achievement format and faction rank names");
+        e.AdminDemote(1,15000,out _);Check(sounds[sounds.Count-1]=="1:TK_1.wav","admin demotion cue");
+        e=Engine();sounds.Clear();e.SoundRequested+=(id,file)=>sounds.Add(file);e.Observe(1,"Penalty",0,"SOL",0);e.Teamkill(1,0,0);
+        Check(sounds.Count==1&&sounds[0]=="TK_2.wav","traitor transition only uses traitor cue");
+        e.Teamkill(1,0,5);Check(sounds.Count==1,"ignored splash teamkill has no extra sound");
+        e=new RankEngine(new RankConfig{Sounds=new RankSoundConfig{Enabled=false}});e.SoundRequested+=(id,file)=>sounds.Add(file);e.Observe(1,"Silent",0,"SOL",15000);Check(sounds.Count==1,"configured disabled sounds stay silent");
+        e=Engine();e.Observe(1,"Leader",0,"Centauri",0);e.SetCommanders(new Dictionary<int,long>{{0,1}},false);e.StartCommander(1,out _);
+        Check(e.Policy(1).Multiplier(RewardKind.Logistics)==1.24m,"commander starting rank earns24 percent, not85");
+        Check(e.Config.NativeCategoryRules["Light"].Contains("Transport")&&e.Config.NativeCategoryRules["Light"].Contains("Repair")&&!e.Config.NativeCategoryRules["Heavy"].Contains("Harvester"),"transport and repair light, harvester removed");
+        for(int tier=0;tier<17;tier++){var check=Engine();check.Observe(1,"Ban",0,"SOL",check.Config.Ranks[tier].Score);Check(check.Policy(1).ExcludedObjectInfoNames.Contains("ObjectInfo_Alien_Shrimp")&&check.Policy(1).ExcludedObjectInfoNames.Contains("ObjectInfo_Sol_HoverHarvester"),"all rank policies ban harvesters at tier"+tier);}
+        Reject(()=>new RankEngine(new RankConfig{Sounds=new RankSoundConfig{Traitor="../TK_2.wav"}}),"sound path traversal rejected");
         Console.WriteLine("Passed " + checks + " engine assertions.");
     }
 }

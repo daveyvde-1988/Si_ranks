@@ -3,12 +3,12 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion><Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <Version>1.2.1</Version>
+    <Version>1.3.0</Version>
     <AssemblyName>Si_Ranks</AssemblyName>
     <ServerRoot>$(MSBuildThisFileDirectory)..\..</ServerRoot>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="RankEngine.cs"/><Compile Include="Adapters.cs"/><Compile Include="RankMod.cs"/><Compile Include="RewardPatches.cs"/><Compile Include="RankLog.cs"/>
+    <Compile Include="RankEngine.cs"/><Compile Include="Adapters.cs"/><Compile Include="RankMod.cs"/><Compile Include="RewardPatches.cs"/><Compile Include="RankLog.cs"/><Compile Include="RankSounds.cs"/><Compile Include="HarvesterRestrictions.cs"/>
     <Reference Include="$(ServerRoot)/Silica_Data/Managed/*.dll" Exclude="$(ServerRoot)/Silica_Data/Managed/mscorlib.dll;$(ServerRoot)/Silica_Data/Managed/netstandard.dll;$(ServerRoot)/Silica_Data/Managed/System*.dll" Private="false"/>
     <Reference Include="$(ServerRoot)/MelonLoader/net35/MelonLoader.dll" Private="false"/>
     <Reference Include="$(ServerRoot)/MelonLoader/net35/0Harmony.dll" Private="false"/>

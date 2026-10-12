@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 using SilicaAdminMod;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(SiPlayerRanks.RankMod), "Silica Field Ranks", "1.2.1", "Local")]
+[assembly: MelonInfo(typeof(SiPlayerRanks.RankMod), "Silica Field Ranks", "1.3.0", "Local")]
 [assembly: MelonGame("Bohemia Interactive", "Silica")]
 [assembly: MelonOptionalDependencies("Admin Mod", "Si_Formation")]
 
@@ -48,6 +48,8 @@ namespace SiPlayerRanks
                 config.Validate();formation.Configure(config);engine=new RankEngine(config);
                 engine.Message+=(id,message)=>Tell(id,message);
                 engine.PolicyChanged+=formation.Update;
+                engine.SoundRequested+=RankSounds.Play;
+                engine.GlobalMessage+=message=>HelperMethods.SendChatMessageToAll("[Ranks] ",message);
                 // No verified persistent game round GUID exists. Never restore unprovable reload state.
                 awaitNewRound=AppDomain.CurrentDomain.GetData(LifetimeKey)!=null;
                 AppDomain.CurrentDomain.SetData(LifetimeKey,true);
@@ -57,13 +59,23 @@ namespace SiPlayerRanks
             catch(Exception e)
             {engine=null;initializationError="Ranks disabled: configuration load failed. Existing file preserved. "+e.Message;RankLog.Error(initializationError);}
         }
-        public override void OnLateInitializeMelon(){formation.Bind();if(engine!=null)RewardPatches.Bind(HarmonyInstance);Bind();}
+        public override void OnLateInitializeMelon()
+        {
+            formation.Bind();
+            if(engine!=null)
+            {
+                RewardPatches.Bind(HarmonyInstance);
+                RankSounds.Initialize(config.Sounds.Enabled?config.Sounds.Files():Array.Empty<string>());
+            }
+            Bind();
+        }
         internal static decimal RewardPolicy(long id,RewardKind kind)=>Ready?engine!.Policy(id).Multiplier(kind):1m;
         public override void OnSceneWasLoaded(int index,string name)=>Bind();
         public override void OnSceneWasInitialized(int index,string name)=>Bind();
         private static void Bind()
         {
             if(engine==null)return;
+            HarvesterRestrictions.Bind();
             GameEvents.OnGameStarted-=Started;GameEvents.OnGameStarted+=Started;
             GameEvents.OnGameEnded-=Ended;GameEvents.OnGameEnded+=Ended;
             GameEvents.OnGameRestart-=Restarted;GameEvents.OnGameRestart+=Restarted;
@@ -107,7 +119,7 @@ namespace SiPlayerRanks
         private static void StartRound(GameMode mode,bool announceStartingRank)
         {
             if(engine==null||!Server)return;
-            formation.ClearAll();engine.Reset();formation.ForgetApplications();playerInstances.Clear();
+            RankSounds.Reset();formation.ClearAll();engine.Reset();formation.ForgetApplications();playerInstances.Clear();
             awaitNewRound=false;active=true;modeId=mode.GetInstanceID();
             confirmedRoundStart=announceStartingRank;startingCommandersPending=announceStartingRank;
             startTime=Time.realtimeSinceStartup;lastGameTime=mode.GameTime;
@@ -147,7 +159,7 @@ namespace SiPlayerRanks
         private static void StopRound()
         {
             if(!Server)return;
-            active=false;confirmedRoundStart=false;startingCommandersPending=false;engine?.Reset();formation.ClearAll();playerInstances.Clear();
+            active=false;confirmedRoundStart=false;startingCommandersPending=false;RankSounds.Reset();engine?.Reset();formation.ClearAll();playerInstances.Clear();
         }
         private static void Left(Player p)
         {if(Ready&&p&&Id(p)!=0){engine!.Disconnect(Id(p));RefreshCommanders();}}
@@ -186,6 +198,7 @@ namespace SiPlayerRanks
             if(engine==null||!Server||awaitNewRound)return;
             var mode=GameMode.CurrentGameMode;
             if(!mode||!mode.GameBegun||mode.GameOver){if(active)StopRound();return;}
+            RankSounds.Tick();
             if(!active)
             {
                 StartRound(mode,false);startTime=Time.realtimeSinceStartup-mode.GameTime;
@@ -304,7 +317,7 @@ namespace SiPlayerRanks
         }
         public override void OnDeinitializeMelon()
         {
-            active=false;confirmedRoundStart=false;startingCommandersPending=false;formation.ClearAll();RewardPatches.Unbind(HarmonyInstance);
+            active=false;confirmedRoundStart=false;startingCommandersPending=false;RankSounds.Reset();HarvesterRestrictions.Unbind();formation.ClearAll();RewardPatches.Unbind(HarmonyInstance);
             GameEvents.OnGameStarted-=Started;GameEvents.OnGameEnded-=Ended;GameEvents.OnGameRestart-=Restarted;
             GameEvents.OnCommanderChanged-=CommanderChanged;GameEvents.OnPlayerChangedTeam-=TeamChanged;
             GameEvents.OnPlayerLeft-=Left;GameEvents.OnPlayerDeleted-=Left;

@@ -1,6 +1,6 @@
 # Silica Field Ranks
 
-**Version 1.2.1 - server-side Silica player ranks, compiled as `Si_Ranks.dll`.**
+**Version 1.3.0 - server-side Silica player ranks, compiled as `Si_Ranks.dll`.**
 
 Players progress through a shared rank ladder using their authoritative current-round game score. Faction-specific names, personal-credit bonuses and FPS squad permissions follow that rank. Progress, penalties and limited seats reset every round; there is no career score.
 
@@ -41,7 +41,7 @@ Private has personal control of its own unit, but no permission to recruit AI fo
 - SOL: `ObjectInfo_Sol_UltraHeavy_SiegeTank`.
 - Centauri: `ObjectInfo_Cent_UltraHeavy_CrimsonTank`.
 
-They do not exclude Alien Goliath. From Second Lieutenant onward, all recruited unit types are permitted, subject to native game validation and Formation's existing restrictions.
+They do not exclude Alien Goliath. From Second Lieutenant onward, all recruited unit types except Harvesters/Shrimp are permitted, subject to native game validation and Formation's existing restrictions.
 
 ## Commanders
 
@@ -49,15 +49,15 @@ At genuine round start, each active RTS commander receives:
 
 - **Chief Master Sergeant** for SOL, **Sergeant Major** for Centauri, or **Brood Warden** for Alien: normal tier 9.
 - **+3,500 actual scoreboard points**, once per account per round.
-- **85% extra eligible personal credits while commanding**: `base * 1.85`, replacing the ordinary rank bonus.
+- **The same personal-credit bonus as the earned rank**, just like FPS players: tier 9 starts at +24%. No special commander multiplier is applied.
 
 Version 1.2.1 fixes native start ordering: `OnGameStarted` fires before Strategy resolves its initial commander lottery. The rank reset arms a pending starting award; a server-side postfix on `MP_Strategy.ResolveCommanderLottery` awards the selected initial commanders immediately after the lottery returns. It consumes that pending award once. FPS starting-rank announcements also wait until commander selection is complete. Mid-round bootstrap, duplicate callbacks and subsequent commander replacements do not trigger this award.
 
-There is no honorary title or twenty-second appointment delay. Commanders progress through the same score thresholds and exact-rank seat queues as FPS players, and receive private promotion and queue messages. Promotions display the earned rank and the active commander bonus. Starting as commander does not claim the final Field Marshal/Hive Mind seat.
+There is no honorary title or twenty-second appointment delay. Commanders progress through the same score thresholds and exact-rank seat queues as FPS players, and receive private promotion and queue messages. Promotions display the earned rank and its normal bonus. Starting as commander does not claim the final Field Marshal/Hive Mind seat.
 
-While in RTS, the FPS policy is player-only (cap 1). Leaving command retains the earned rank and restores that rank's FPS permissions and resource bonus. A commander already holding Field Marshal/Hive Mind continues to receive 85% after returning to FPS, because the final rank itself grants that bonus.
+While in RTS, the FPS policy is player-only (cap 1). Leaving command retains the earned rank and reward bonus and restores that rank's FPS permissions. A commander already holding Field Marshal/Hive Mind continues to receive 85% after returning to FPS, because the final rank itself grants that bonus.
 
-Late commander assignments and transfers receive the commander reward modifier immediately, but do not receive the starting-score grant or a forced starting tier. Reconnects, repeated notifications and penalties cannot repeat the score award. Traitor restrictions take precedence over commander rewards.
+Late commander assignments and transfers keep their earned rank bonus and do not receive the starting-score grant or a forced starting tier. Reconnects, repeated notifications and penalties cannot repeat the score award. Traitor restrictions take precedence over normal rank rewards for every role.
 
 ## Score updates, rounds and reconnects
 
@@ -107,18 +107,20 @@ Temporary source-specific runtime transpilers adjust these verified earning site
 
 | Reward source | Ordinary FPS player | Active commander | Traitor |
 |---|---|---|---|
-| KoH unit kills | Rank multiplier | 1.85x | Zero |
-| KoH structure destruction | Rank multiplier | 1.85x | Zero |
-| KoH zone-presence reward | Rank multiplier | 1.85x | 0.75x |
-| Logistics delivery/harvester batches | Rank multiplier | 1.85x | 0.75x |
+| KoH unit kills | Rank multiplier | Rank multiplier | Zero |
+| KoH structure destruction | Rank multiplier | Rank multiplier | Zero |
+| KoH zone-presence reward | Rank multiplier | Rank multiplier | 0.75x |
+| Logistics delivery/harvester batches | Rank multiplier | Rank multiplier | 0.75x |
 
-Ordinary multiplier is `1 + rankBonus / 100`: Colonel receives 1.50x and Field Marshal/Hive Mind 1.85x. Bonuses do not stack with the commander modifier. Modified positive payouts are floored to whole credits and capped to remaining integer balance capacity. Fractional bonus credits are not carried between payments.
+Ordinary multiplier is `1 + rankBonus / 100`: Colonel receives 1.50x and Field Marshal/Hive Mind 1.85x. Commanders use this same rank multiplier; there is no separate commander modifier. Modified positive payouts are floored to whole credits and capped to remaining integer balance capacity. Fractional bonus credits are not carried between payments.
 
 Purchases, refunds, starter/admin credits, transfers, bounties and unknown external grants are unchanged. The generic `AddCredits` primitive is not globally patched. KoH messages use the modified amount; Logistics announcements read the payment receipt while its base-credit pending ledger, consumption and retries remain unchanged. Logistics classification requires both its verified reason and the known credit bridge on the call stack.
 
 The patches require reviewed DLL hashes and expected signatures/IL patterns. An incompatible KoH/Logistics update leaves the affected original reward paths intact and records diagnostic status. `/rank` shows per-source availability; `/debug on` enables log output. Review compatibility whenever either economy mod changes. See [INTEGRATION_REQUESTS.md](INTEGRATION_REQUESTS.md) for the future supported reward API replacement.
 
 ## Formation integration and native categories
+
+Harvesters and Shrimp are permanently excluded at every tier, including tiers that otherwise permit any unit. Native Harvester type vetoes reject FPS recruitment, direct selection, alien takeover, driver boarding and forced Player.ControlledUnit assignments. This absolute ban also applies when Formation admin size overrides are active. RTS AI orders, purchases/spawns as AI and passenger boarding are preserved; already controlled units are not forcibly stripped on a live load. See [audit/HARVESTER_RESTRICTIONS.md](audit/HARVESTER_RESTRICTIONS.md) for inspected entry points.
 
 Ranks calls the public owner-scoped `FormationApi.RequestPlayerPolicy` using owner `SilicaFieldRanks`. Formation remains the sole recruitment enforcer, checking existing server recruitment and AIGroup.AddUnit paths. Policy changes release disallowed eligible AI followers first, then excess followers, using existing RemoveUnit behavior. Controlled leaders, player-controlled units and driver-owned units are protected; no units are killed or transferred to another owner.
 
@@ -129,8 +131,8 @@ Native type/weight data for 61 faction unit assets is recorded in [audit/native-
 | Rank category | Native permission |
 |---|---|
 | Infantry | `Infantry`, all weights |
-| Light | `Cavalry`, all weights; `Special:Light` |
-| Heavy | `Tank`, ground `Transport`, `Harvester`, `Special`, `Repair` |
+| Light | `Cavalry`, all weights; `Special:Light`; ground `Transport`; `Repair` |
+| Heavy | `Tank`, `Special` |
 | Air | `Aircraft`, plus exact Dropship/Shuttle overrides |
 | Siege | `Siege` |
 | Other | `None` |
@@ -138,6 +140,23 @@ Native type/weight data for 61 faction unit assets is recorded in [audit/native-
 SOL Dropship and Centauri Shuttle are native Transport:Heavy. Exact overrides (`ObjectInfo_Sol_Air_Dropship`, `ObjectInfo_Cent_Air_Shuttle`) require Air permission, even when generic Transport is allowed. Native asset membership does not establish recruitability; native validation remains in force.
 
 Configure `NativeCategoryRules` and `NativeObjectCategoryOverrides` to refine this policy. Rules accept `Type`, exact `Type:Weight`, `Type:*`, or `*`. `Type:Any` means the native Any weight, not a wildcard. Exact overrides determine the object's rank category; denied names win. API signatures and result codes are documented in [INTEGRATION_REQUESTS.md](INTEGRATION_REQUESTS.md).
+
+## Announcements and sound cues
+
+Automatic and admin promotions to tier 15 (Colonel / Hive Lord) and tier 16 (Field Marshal / Hive Mind) announce to all chat: `<playername> just achieved <rank name> !!`. Each actual crossing is announced; unchanged score checks and occupied queues do not repeat it. If one update reaches both tiers, both achievements are announced while the private promotion message and sound report the final tier once.
+
+Sound cues are private to the affected player, including commanders, through the existing Admin Mod recipient audio stream. Clips are decoded/cached once, queued per recipient, and stopped on round end/unload or disconnect. There is no broadcast audio or disk reading on every promotion.
+
+| Event | File in `UserData/sounds` |
+|---|---|
+| Promotion to tier 1-4 | `Promotion_1.wav` |
+| Promotion to tier 5-9 | `Promotion_2.wav` |
+| Promotion to tier 10-14 | `Promotion_3.wav` |
+| Promotion to tier 15-16 | `Promotion_4.wav` |
+| Actual demotion, including admin/team-switch demotion | `TK_1.wav` |
+| First transition to Traitor / Deserter / Outcast | `TK_2.wav` |
+
+The supplied file is named `TK_2.wav`, not `TK2.wav`; configuration uses the existing filename. Reaching Traitor uses only its cue, not both demotion sounds. Ignored teamkills and rejected admin commands make no sound. Starting commander tier 9 uses `Promotion_2.wav`; starting FPS tier 0 is silent. Disable all cues with `Sounds.Enabled = false`, or use an empty filename to disable an individual cue. Missing/invalid files disable only their cue; diagnostics remain behind `/debug`.
 
 ## Chat commands and logging
 
@@ -162,7 +181,7 @@ All Ranks-owned console/file logging, including startup, round messages, warning
 First load creates `UserData/Ranks_cfg/Si_Ranks_Config.json` under the server's established UserData directory. Options include:
 
 - `Debug`, `PollSeconds` (30), and `TeamkillCooldownSeconds` (10).
-- `StartingCommanderRank` (tier 9), `StartingCommanderScore` (3,500), and `CommanderBonusPercent` (85).
+- `StartingCommanderRank` (tier 9) and `StartingCommanderScore` (3,500).
 - `TraitorOtherBonusPercent` (-25).
 - All seventeen rank definitions: names, score, squad cap, total bonus, seats, categories and exact exclusions.
 - `NativeCategoryRules` and `NativeObjectCategoryOverrides`.
@@ -188,7 +207,7 @@ dotnet run --project Tests/RankEngineTests.csproj
 dotnet run --project Tests/RewardPatchTests.csproj "-p:ServerRoot=D:\SteamLibrary\steamapps\common\Silica Dedicated Server" -- "D:\SteamLibrary\steamapps\common\Silica Dedicated Server"
 ```
 
-Version 1.2.1 built with zero warnings/errors. **105 engine assertions and 29 offline reward compatibility assertions passed.** The reward harness inspects raw IL from installed DLLs; it does not execute game methods or validate Unity/Mono patch installation. Recorded checks and limitations are in [VALIDATION.md](VALIDATION.md).
+Version 1.3.0 built with zero warnings/errors. **135 engine assertions and 31 offline reward compatibility assertions passed.** The reward harness inspects raw IL from installed DLLs; it does not execute game methods or validate Unity/Mono patch installation. Recorded checks and limitations are in [VALIDATION.md](VALIDATION.md).
 
 Gameplay verification remains user-owned: check startup patch/policy status with `/rank`, commander starting score and names, promotion messages and queues, final-seat exclusivity, rewards/announcements, Traitor reductions, recruitment restrictions and admin overrides, round resets, team switches and reconnect recovery.
 
