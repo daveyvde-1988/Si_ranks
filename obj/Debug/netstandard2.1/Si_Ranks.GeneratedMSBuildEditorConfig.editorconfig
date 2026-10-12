@@ -1,0 +1,8 @@
+is_global = true
+build_property.RootNamespace = Si_Ranks
+build_property.ProjectDir = D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.CsWinRTUseWindowsUIXamlProjections = false
+build_property.EffectiveAnalysisLevelStyle = 
+build_property.EnableCodeStyleSeverity = 

@@ -1,0 +1,14 @@
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\bin\RankEngineTests\Debug\net8.0\RankEngineTests.exe
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\bin\RankEngineTests\Debug\net8.0\RankEngineTests.deps.json
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\bin\RankEngineTests\Debug\net8.0\RankEngineTests.runtimeconfig.json
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\bin\RankEngineTests\Debug\net8.0\RankEngineTests.dll
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\bin\RankEngineTests\Debug\net8.0\RankEngineTests.pdb
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\RankEngineTests.GeneratedMSBuildEditorConfig.editorconfig
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\RankEngineTests.AssemblyInfoInputs.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\RankEngineTests.AssemblyInfo.cs
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\RankEngineTests.csproj.CoreCompileInputs.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\RankEngineTests.dll
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\refint\RankEngineTests.dll
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\RankEngineTests.pdb
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\RankEngineTests.genruntimeconfig.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\Tests\obj\RankEngineTests\Debug\net8.0\ref\RankEngineTests.dll

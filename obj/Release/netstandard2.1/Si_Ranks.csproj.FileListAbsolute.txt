@@ -1,0 +1,10 @@
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Release\netstandard2.1\Si_Ranks.csproj.AssemblyReference.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Release\netstandard2.1\Si_Ranks.GeneratedMSBuildEditorConfig.editorconfig
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Release\netstandard2.1\Si_Ranks.AssemblyInfoInputs.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Release\netstandard2.1\Si_Ranks.AssemblyInfo.cs
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Release\netstandard2.1\Si_Ranks.csproj.CoreCompileInputs.cache
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\bin\Release\netstandard2.1\Si_Ranks.deps.json
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\bin\Release\netstandard2.1\Si_Ranks.dll
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\bin\Release\netstandard2.1\Si_Ranks.pdb
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Release\netstandard2.1\Si_Ranks.dll
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Release\netstandard2.1\Si_Ranks.pdb

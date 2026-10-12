@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems><Nullable>enable</Nullable><NuGetAudit>false</NuGetAudit><ServerRoot>$(MSBuildThisFileDirectory)..\..\..</ServerRoot></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../RewardPatches.cs"/><Compile Include="../RankLog.cs"/><Compile Include="RewardPatchProgram.cs"/>
+    <Reference Include="$(ServerRoot)/MelonLoader/net35/0Harmony.dll"/>
+    <Reference Include="$(ServerRoot)/Silica_Data/Managed/SilicaCore.dll"/>
+    <Reference Include="$(ServerRoot)/Silica_Data/Managed/UnityEngine.CoreModule.dll"/>
+  </ItemGroup>
+</Project>
