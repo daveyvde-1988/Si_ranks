@@ -32,7 +32,7 @@ static class Program
         e.Reconcile(); Check(e.Round.Players[1].Rank == 3, "switch baseline prevents instant recovery");
         Check(e.Describe(1).Contains("Lance Corporal"), "faction names");
         e = Engine(); e.Observe(1, "P", 0, "SOL", 300); Check(e.Teamkill(1, 300, 0) && e.Round.Players[1].Rank == 0, "landing private not traitor");
-        Check(e.Teamkill(1, 300, 10) && e.Round.Players[1].Rank == -1, "below private traitor");
+        Check(e.Teamkill(1, 300, 10) && e.Round.Players[1].Rank == 0, "second strike stays at Private"); Check(e.Teamkill(1, 300, 20) && e.Round.Players[1].Rank == -1, "third strike assigns traitor");
         Check(e.Policy(1).Squad == 1 && e.Policy(1).Multiplier(RewardKind.Kill) == 0 && e.Policy(1).Multiplier(RewardKind.Structure) == 0 && e.Policy(1).Multiplier(RewardKind.Logistics) == 0.75m, "traitor restrictions");
         e.Observe(1, "P", 1, "Alien", 10000); Check(e.Round.Players[1].Rank == -1, "traitor switch lock"); Check(!e.AdminPromote(1, out _), "admin cannot unlock");
         e.Disconnect(1); e.Observe(1, "P", 1, "Alien", 10000); Check(e.Round.Players[1].Rank == -1, "traitor reconnect lock");
@@ -71,12 +71,12 @@ static class Program
         e.Observe(1,"Recovery",0,"SOL",299);Check(e.Round.Players[1].Rank==7,"reconnect still requires remaining gap");
         e.Observe(1,"Recovery",0,"SOL",300);Check(e.Round.Players[1].Rank==8,"reconnect recovery preserves earned partial gap");
         e=Engine();e.Observe(1,"Ordinary",0,"SOL",3000);e.RebindScore(1,0);e.Observe(1,"Ordinary",0,"SOL",500);Check(e.Round.Players[1].ScoreOffset==0&&e.Round.Players[1].Rank==8,"ordinary score is never accumulated across reconnect");
-        e=Engine();e.Observe(1,"Marshal",0,"SOL",14999);Check(e.Round.Players[1].Rank==15,"final rank unavailable below 15000");
-        e.Observe(1,"Marshal",0,"SOL",15000);Check(e.Round.Players[1].Rank==16&&e.Policy(1).Squad==20&&e.Policy(1).Multiplier(RewardKind.Kill)==1.85m,"earned Field Marshal grants 20 cap and 85 percent");
-        e.Observe(2,"Queue",0,"Centauri",15000);Check(e.Round.Players[2].Rank==15,"one exact final seat per team");
-        e.Observe(3,"Other",1,"Alien",15000);Check(e.Round.Players[3].Rank==16&&e.Describe(3).Contains("Hive Mind"),"independent faction final seat and display");
+        e=Engine();e.Observe(1,"Marshal",0,"SOL",15999);Check(e.Round.Players[1].Rank==15,"final rank unavailable below 16000");
+        e.Observe(1,"Marshal",0,"SOL",16000);Check(e.Round.Players[1].Rank==16&&e.Policy(1).Squad==20&&e.Policy(1).Multiplier(RewardKind.Kill)==1.85m,"earned Field Marshal grants 20 cap and 85 percent");
+        e.Observe(2,"Queue",0,"Centauri",16000);Check(e.Round.Players[2].Rank==15,"one exact final seat per team");
+        e.Observe(3,"Other",1,"Alien",16000);Check(e.Round.Players[3].Rank==16&&e.Describe(3).Contains("Hive Mind"),"independent faction final seat and display");
         Check(!e.AdminPromote(1,out _),"admin cannot exceed new final rank");
-        e.AdminDemote(1,15000,out _);Check(e.Round.Players[2].Rank==16&&e.Round.Players[1].Rank==14,"final demotion frees seat and protects occupied Colonel");
+        e.AdminDemote(1,16000,out _);Check(e.Round.Players[2].Rank==16&&e.Round.Players[1].Rank==14,"final demotion frees seat and protects occupied Colonel");
         e=Engine();e.Observe(1,"Starter",0,"SOL",0);Check(!e.StartCommander(1,out _),"noncommander cannot claim starting award");
         e.SetCommanders(new Dictionary<int,long>{{0,1}},false);Check(e.StartCommander(1,out int award)&&award==3500&&e.Round.Players[1].Rank==9,"commander starts at tier9 and gains real score");
         Check(e.Describe(1).Contains("Chief Master Sergeant")&&!e.Describe(1).Contains("Field Marshal")&&e.Policy(1).Multiplier(RewardKind.Other)==1.24m,"commander uses actual starting rank and active role bonus");
@@ -93,19 +93,43 @@ static class Program
         e.Observe(1,"Ace",0,"SOL",1000);Check(sounds.Count==1&&sounds[0]=="1:Promotion_1.wav","multi-step low promotion emits one final-tier cue");
         e.Reconcile();Check(sounds.Count==1&&announcements.Count==0,"unchanged rank has no repeat cue or global announcement");
         e.Observe(1,"Ace",0,"SOL",3500);Check(sounds[sounds.Count-1]=="1:Promotion_2.wav","sergeant cue");
-        e.Observe(1,"Ace",0,"SOL",9000);Check(sounds[sounds.Count-1]=="1:Promotion_3.wav"&&announcements.Count==0,"officer cue without top announcement");
-        e.Observe(1,"Ace",0,"SOL",15000);Check(sounds[sounds.Count-1]=="1:Promotion_4.wav"&&announcements.Count==2,"top tiers announce both genuine crossings with one private cue");
-        Check(announcements[0]=="Ace just achieved Colonel !!"&&announcements[1]=="Ace just achieved Field Marshal !!","global achievement format and faction rank names");
-        e.AdminDemote(1,15000,out _);Check(sounds[sounds.Count-1]=="1:TK_1.wav","admin demotion cue");
-        e=Engine();sounds.Clear();e.SoundRequested+=(id,file)=>sounds.Add(file);e.Observe(1,"Penalty",0,"SOL",0);e.Teamkill(1,0,0);
+        e.Observe(1,"Ace",0,"SOL",9000);Check(sounds[sounds.Count-1]=="1:Promotion_3.wav"&&announcements.Count==1&&announcements[0]=="Ace just achieved Chief Master Sergeant !!","tier9 announced once before officer cue");
+        e.Observe(1,"Ace",0,"SOL",16000);Check(sounds[sounds.Count-1]=="1:Promotion_4.wav"&&announcements.Count==3,"top tiers announce both genuine crossings with one private cue");
+        Check(announcements[1]=="Ace just achieved Colonel !!"&&announcements[2]=="Ace just achieved Field Marshal !!","global achievement format and faction rank names");
+        e.AdminDemote(1,16000,out _);Check(sounds[sounds.Count-1]=="1:TK_1.wav","admin demotion cue");
+        e=Engine();sounds.Clear();e.SoundRequested+=(id,file)=>sounds.Add(file);e.Observe(1,"Penalty",0,"SOL",0);e.Teamkill(1,0,0);e.Teamkill(1,0,10);sounds.Clear();e.Teamkill(1,0,20);
         Check(sounds.Count==1&&sounds[0]=="TK_2.wav","traitor transition only uses traitor cue");
-        e.Teamkill(1,0,5);Check(sounds.Count==1,"ignored splash teamkill has no extra sound");
-        e=new RankEngine(new RankConfig{Sounds=new RankSoundConfig{Enabled=false}});e.SoundRequested+=(id,file)=>sounds.Add(file);e.Observe(1,"Silent",0,"SOL",15000);Check(sounds.Count==1,"configured disabled sounds stay silent");
+        e.Teamkill(1,0,25);Check(sounds.Count==1,"ignored splash teamkill has no extra sound");
+        e=new RankEngine(new RankConfig{Sounds=new RankSoundConfig{Enabled=false}});e.SoundRequested+=(id,file)=>sounds.Add(file);e.Observe(1,"Silent",0,"SOL",16000);Check(sounds.Count==1,"configured disabled sounds stay silent");
         e=Engine();e.Observe(1,"Leader",0,"Centauri",0);e.SetCommanders(new Dictionary<int,long>{{0,1}},false);e.StartCommander(1,out _);
         Check(e.Policy(1).Multiplier(RewardKind.Logistics)==1.24m,"commander starting rank earns24 percent, not85");
         Check(e.Config.NativeCategoryRules["Light"].Contains("Transport")&&e.Config.NativeCategoryRules["Light"].Contains("Repair")&&!e.Config.NativeCategoryRules["Heavy"].Contains("Harvester"),"transport and repair light, harvester removed");
         for(int tier=0;tier<17;tier++){var check=Engine();check.Observe(1,"Ban",0,"SOL",check.Config.Ranks[tier].Score);Check(check.Policy(1).ExcludedObjectInfoNames.Contains("ObjectInfo_Alien_Shrimp")&&check.Policy(1).ExcludedObjectInfoNames.Contains("ObjectInfo_Sol_HoverHarvester"),"all rank policies ban harvesters at tier"+tier);}
         Reject(()=>new RankEngine(new RankConfig{Sounds=new RankSoundConfig{Traitor="../TK_2.wav"}}),"sound path traversal rejected");
+        e=Engine();e.Observe(1,"Switch",0,"SOL",1000);e.Observe(1,"Switch",1,"Alien",1000);Check(e.Round.Players[1].Rank==0&&e.Round.Players[1].Strikes==0,"team switch floors at Private without strike");
+        e.Teamkill(1,1000,0);Check(e.Round.Players[1].Rank==0&&e.Round.Players[1].Strikes==1,"first kill after switch is not traitor");
+        e.Teamkill(1,1000,5);Check(e.Round.Players[1].Strikes==1,"ignored splash cannot advance traitor strike threshold");
+        e.Teamkill(1,1000,10);Check(e.Round.Players[1].Rank==0&&e.Round.Players[1].Strikes==2,"second counted kill remains normal Private");
+        Check(!e.AdminDemote(1,1000,out _)&&e.Round.Players[1].Rank==0,"admin cannot create traitor at Private");
+        e.Disconnect(1);e.Observe(1,"Switch",2,"Centauri",1000);Check(e.Round.Players[1].Rank==0&&e.Round.Players[1].Strikes==2,"reconnect and switch retain two strikes without traitor");
+        e.Teamkill(1,1000,20);Check(e.Round.Players[1].Rank==-1&&e.Round.Players[1].Strikes==3,"third strike after reconnect assigns traitor");
+        e=Engine();e.Observe(1,"High",0,"SOL",16000);e.Teamkill(1,16000,0);e.Teamkill(1,16000,10);e.Teamkill(1,16000,20);Check(e.Round.Players[1].Rank==-1,"third strike assigns traitor even at high rank");
+        var promotionMessages=new List<string>();e=Engine();e.Message+=(id,message)=>promotionMessages.Add(message);e.Observe(1,"Commander",0,"SOL",0,false,false);e.Observe(1,"Commander",0,"SOL",0,true,false);e.SetCommanders(new Dictionary<int,long>{{0,1}},false);promotionMessages.Clear();e.Observe(1,"Commander",0,"SOL",4000);
+        Check(promotionMessages.Any(m=>m.StartsWith("Promoted to "))&&!promotionMessages.Any(m=>m.Contains("Squad size")),"commander promotions omit FPS cap");
+        e.SetCommanders(new Dictionary<int,long>(),false);promotionMessages.Clear();e.Observe(1,"Commander",0,"SOL",4500);Check(promotionMessages.Any(m=>m.Contains("Squad size")),"FPS promotion still shows cap");
+        foreach(var sample in new[]{(300,"Alien_Promotion_1.wav"),(1500,"Alien_Promotion_2.wav"),(4000,"Alien_Promotion_3.wav"),(12000,"Alien_Promotion_4.wav")})
+        {var alien=Engine();string clip="";alien.SoundRequested+=(id,file)=>clip=file;alien.Observe(1,"Alien",0,"Alien",sample.Item1);Check(clip==sample.Item2,"Alien promotion mapping at score"+sample.Item1);}
+        e=Engine();e.Observe(1,"Ace",0,"SOL",300);e.Observe(2,"Boss",1,"Centauri",500);var bonus=e.HigherRankKill(1,2);
+        Check(bonus!=null&&bonus.Multiplier==2,"one-tier higher victim gets minimum2 multiplier");
+        Check(bonus.Announcement(200)=="Specialist 1 Ace killed higher ranking Private First Class Boss and got a 200cr reward!!!","higher-rank kill announcement snapshot format");
+        Check(e.HigherRankKill(2,1)==null&&e.HigherRankKill(1,1)==null&&e.HigherRankKill(1,99)==null,"lower self and unknown victims have no override");
+        e.Observe(1,"Ace",0,"SOL",1500);e.Observe(2,"Boss",1,"Centauri",4000);bonus=e.HigherRankKill(1,2);Check(bonus!=null&&bonus.Multiplier==5,"tier5 to10 gets gap5 multiplier");
+        string frozen=bonus.Announcement(500);e.Observe(2,"Renamed",1,"Alien",4500);Check(bonus.Announcement(500)==frozen,"award snapshot retains victim rank/name");
+        e.Observe(2,"Boss",0,"SOL",4500);Check(e.HigherRankKill(1,2)==null,"same-team player cannot qualify");
+        e.Observe(2,"Boss",1,"Centauri",16000);e.Teamkill(1,1500,0);e.Teamkill(1,1500,10);e.Teamkill(1,1500,20);Check(e.HigherRankKill(1,2)==null,"traitor attacker never gains higher kill override");
+        e=Engine();e.Observe(1,"Compact",0,"SOL",1000);Check(e.Describe(1)=="Compact is Specialist 4, has +6% reward bonus, gets 5 squad units up to light units.","compact rank contains requested fields only");
+        var tier9Messages=new List<string>();e=Engine();e.GlobalMessage+=tier9Messages.Add;e.Observe(1,"Leader",0,"Centauri",0);e.SetCommanders(new Dictionary<int,long>{{0,1}},false);e.StartCommander(1,out _);Check(tier9Messages.Count==1&&tier9Messages[0]=="Leader just achieved Sergeant Major !!","starting commander also announces tier9");
+        e.Reconcile();Check(tier9Messages.Count==1,"tier9 announcement does not repeat on score check");
         Console.WriteLine("Passed " + checks + " engine assertions.");
     }
 }

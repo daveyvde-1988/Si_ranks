@@ -8,13 +8,23 @@ namespace SiPlayerRanks
     public enum UnitCategories { None = 0, Infantry = 1, Light = 2, Heavy = 4, Air = 8, Siege = 16, Other = 32, Any = 63 }
     public enum RewardKind { Kill, Structure, Logistics, Other }
     public enum Faction { Sol, Centauri, Alien }
+    public sealed class RankedKillBonus
+    {
+        public string KillerName = "", KillerRank = "", VictimName = "", VictimRank = "";
+        public int Multiplier;
+        public long KillerId;
+        public string RoundToken = "";
+        public string Announcement(int credits) => KillerRank + " " + KillerName + " killed higher ranking " + VictimRank + " " + VictimName + " and got a " + credits + "cr reward!!!";
+    }
     public sealed class RankSoundConfig
     {
         public bool Enabled = true;
         public string Tier1To4 = "Promotion_1.wav", Tier5To9 = "Promotion_2.wav", Tier10To14 = "Promotion_3.wav", Tier15To16 = "Promotion_4.wav";
+        public string AlienTier1To4 = "Alien_Promotion_1.wav", AlienTier5To9 = "Alien_Promotion_2.wav", AlienTier10To14 = "Alien_Promotion_3.wav", AlienTier15To16 = "Alien_Promotion_4.wav";
         public string Demotion = "TK_1.wav", Traitor = "TK_2.wav";
         public string Promotion(int tier) => tier < 1 ? "" : tier <= 4 ? Tier1To4 : tier <= 9 ? Tier5To9 : tier <= 14 ? Tier10To14 : Tier15To16;
-        public IEnumerable<string> Files() => new[] { Tier1To4, Tier5To9, Tier10To14, Tier15To16, Demotion, Traitor };
+        public string Promotion(int tier, Faction faction) => faction != Faction.Alien ? Promotion(tier) : tier < 1 ? "" : tier <= 4 ? AlienTier1To4 : tier <= 9 ? AlienTier5To9 : tier <= 14 ? AlienTier10To14 : AlienTier15To16;
+        public IEnumerable<string> Files() => new[] { Tier1To4, Tier5To9, Tier10To14, Tier15To16, AlienTier1To4, AlienTier5To9, AlienTier10To14, AlienTier15To16, Demotion, Traitor };
     }
     public sealed class RankDefinition
     {
@@ -58,7 +68,7 @@ namespace SiPlayerRanks
             string[] sol = { "Private", "Specialist 1", "Specialist 2", "Specialist 3", "Specialist 4", "Sergeant", "Technical Sergeant", "Master Sergeant", "Senior Master Sergeant", "Chief Master Sergeant", "Second Lieutenant", "First Lieutenant", "Captain", "Major", "Lieutenant Colonel", "Colonel", "Field Marshal" };
             string[] centauri = { "Recruit", "Private", "Private First Class", "Lance Corporal", "Corporal", "Sergeant", "Staff Sergeant", "Sergeant First Class", "Master Sergeant", "Sergeant Major", "Second Lieutenant", "First Lieutenant", "Captain", "Major", "Lieutenant Colonel", "Colonel", "Field Marshal" };
             string[] alien = { "Foetus", "Hatchling", "Stalker", "Hunter", "Ravager", "Predator", "Apex Predator", "Brood Warrior", "Brood Guardian", "Brood Warden", "Brood Champion", "Brood Leader", "Brood Master", "Brood Lord", "Hive Guardian", "Hive Lord", "Hive Mind" };
-            int[] score = { 0, 300, 500, 700, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5500, 7000, 9000, 12000, 15000 };
+            int[] score = { 0, 300, 500, 700, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5500, 7000, 9000, 12000, 16000 };
             int[] bonus = { 0, 1, 2, 4, 6, 9, 12, 16, 20, 24, 27, 30, 35, 40, 45, 50, 85 };
             var result = new RankDefinition[score.Length];
             for (int n = 0; n < 17; n++)
@@ -205,7 +215,7 @@ namespace SiPlayerRanks
             foreach (var s in changed.Values)
             {
                 var r = Config.Ranks[s.Rank];
-                Message?.Invoke(s.Id, "Promoted to " + Title(s) + "! Personal credits: +" + r.BonusPercent + "%. Squad size: " + Policy(s.Id).Squad + ".");
+                Message?.Invoke(s.Id, "Promoted to " + Title(s) + "! Personal credits: +" + r.BonusPercent + "%." + (Policy(s.Id).Commander ? "" : " Squad size: " + Policy(s.Id).Squad + "."));
                 Promoted(s, previousRanks[s.Id]);
                 Notify(s);
             }
@@ -234,7 +244,7 @@ namespace SiPlayerRanks
             if (s.LastTeamkill.HasValue && nowSeconds - s.LastTeamkill.Value < Config.TeamkillCooldownSeconds) return false;
             s.LastTeamkill = nowSeconds;
             s.Strikes = s.Strikes == int.MaxValue ? int.MaxValue : s.Strikes + 1;
-            if (s.Rank >= 0) Demote(s, s.Strikes, "Teamkill #" + s.Strikes);
+            if (s.Rank >= 0) Demote(s, s.Strikes, "Teamkill #" + s.Strikes, s.Strikes >= 3);
             return true;
         }
         // An occupied exact-rank seat cannot be stolen by a penalty. Fall back to
@@ -258,9 +268,11 @@ namespace SiPlayerRanks
                 s.Score = freshScore;
             }
         }
-        private void Demote(RankState s, int amount, string reason)
+        private void Demote(RankState s, int amount, string reason, bool makeTraitor = false)
         {
-            long target = (long)s.Rank - amount;
+            // First two strikes and ordinary demotions cannot go below Private.
+            // Only the third counted teamkill strike enters the hidden tier.
+            long target = makeTraitor ? -1 : Math.Max(0, (long)s.Rank - amount);
             if (target < 0)
             {
                 s.Rank = -1;
@@ -294,6 +306,7 @@ namespace SiPlayerRanks
         {
             error = ""; if (!Round.Players.TryGetValue(id, out var s)) { error = "Player not found."; return false; }
             if (s.Rank < 0) { error = "Player is already a Traitor."; return false; }
+            if (s.Rank == 0) { error = "Player is already at the lowest normal rank; only the third teamkill strike assigns Traitor."; return false; }
             s.Score = scoreAfter; Demote(s, 1, "Admin demotion"); return true;
         }
         // Only a genuine round-start path grants this one-time scoreboard award.
@@ -303,10 +316,11 @@ namespace SiPlayerRanks
             if (!Round.Players.TryGetValue(id, out var s) || !s.Online || s.Team < 0 || s.Rank < 0 || s.StartingCommanderAwarded || s.HasRecovery || !Round.Commanders.Values.Contains(id)) return false;
             s.StartingCommanderAwarded = true;
             s.Score = (int)Math.Min(int.MaxValue, (long)s.Score + Config.StartingCommanderScore);
+            int oldRank = s.Rank;
             s.Rank = Math.Max(s.Rank, Config.StartingCommanderRank);
             s.ThresholdOrder.Clear();scoreAfter = s.Score;
             Message?.Invoke(id, "Starting commander rank: " + Title(s) + ". Round score: +" + Config.StartingCommanderScore + ". Personal credits: +" + Config.Ranks[s.Rank].BonusPercent + "%.");
-            Cue(s, Config.Sounds.Promotion(s.Rank));
+            if (s.Rank > oldRank) Promoted(s, oldRank);
             Notify(s);return true;
         }
         public void SetCommanders(IDictionary<int, long> active, bool announceChanges = true)
@@ -326,17 +340,25 @@ namespace SiPlayerRanks
         private void Cue(RankState s, string file) { if (Config.Sounds.Enabled && file != "") SoundRequested?.Invoke(s.Id, file); }
         private void Promoted(RankState s, int previousRank)
         {
-            Cue(s, Config.Sounds.Promotion(s.Rank));
-            for (int tier = Math.Max(previousRank + 1, 15); tier <= s.Rank; tier++)
-                GlobalMessage?.Invoke(Plain(s.Name) + " just achieved " + Plain(Config.Ranks[tier].Display(s.Faction)) + " !!");
+            Cue(s, Config.Sounds.Promotion(s.Rank, s.Faction));
+            for (int tier = previousRank + 1; tier <= s.Rank; tier++)
+                if (tier == 9 || tier >= 15) GlobalMessage?.Invoke(Plain(s.Name) + " just achieved " + Plain(Config.Ranks[tier].Display(s.Faction)) + " !!");
+        }
+        public RankedKillBonus? HigherRankKill(long killerId, long victimId)
+        {
+            if (killerId == victimId || !Round.Players.TryGetValue(killerId, out var killer) || !Round.Players.TryGetValue(victimId, out var victim) ||
+                !killer.Online || !victim.Online || killer.Team < 0 || victim.Team < 0 || killer.Team == victim.Team || killer.Rank < 0 || victim.Rank <= killer.Rank) return null;
+            return new RankedKillBonus { KillerId = killerId, RoundToken = Round.Token, KillerName = Plain(killer.Name), KillerRank = Plain(Title(killer)), VictimName = Plain(victim.Name), VictimRank = Plain(Title(victim)), Multiplier = Math.Max(2, victim.Rank - killer.Rank) };
         }
         private void Notify(RankState s) => PolicyChanged?.Invoke(s.Id, Policy(s.Id));
         public string Describe(long id)
         {
             var s = Round.Players[id]; var p = Policy(id);
-            string allowed = p.Categories.ToString();
-            if (p.Categories != UnitCategories.None && p.ExcludedObjectInfoNames.Length > 0) allowed += " except " + string.Join(" and ", p.ExcludedObjectInfoNames.Select(UnitLabel));
-            return Plain(s.Name) + ": " + Title(s) + "; team: " + Plain(s.TeamName) + "; round score: " + s.Score + "; personal resources: " + (p.Traitor ? "combat 0%, other " + (p.Multiplier(RewardKind.Other) * 100) + "%" : (p.Multiplier(RewardKind.Other) * 100) + "% of base") + "; allowed units: " + allowed + "; FPS squad limit: " + p.Squad + (p.Commander ? "; role: RTS commander" : "") + ".";
+            string bonus = p.Traitor ? Config.TraitorOtherBonusPercent + "% reward bonus (no combat rewards)" : "+" + p.RankBonus + "% reward bonus";
+            string units = p.Squad + " squad " + (p.Squad == 1 ? "unit" : "units");
+            string allowed = p.Categories == UnitCategories.Any ? (p.ExcludedObjectInfoNames.Contains("ObjectInfo_Sol_UltraHeavy_SiegeTank") ? "any unit except Siege/Crimson tanks and harvesters/Shrimp" : "any unit except harvesters/Shrimp")
+                : (p.Categories & UnitCategories.Air) != 0 ? "air units" : (p.Categories & UnitCategories.Heavy) != 0 ? "heavy units" : (p.Categories & UnitCategories.Light) != 0 ? "light units" : "infantry";
+            return Plain(s.Name) + " is " + Title(s) + ", has " + bonus + ", gets " + units + (p.Categories == UnitCategories.None ? " (player only)." : " up to " + allowed + ".");
         }
         private static string UnitLabel(string name) => name == "ObjectInfo_Sol_UltraHeavy_SiegeTank" ? "Siege Tank" : name == "ObjectInfo_Cent_UltraHeavy_CrimsonTank" ? "Crimson Tank" : Plain(name);
         public static string Plain(string text) => (text ?? "").Replace("<", "[").Replace(">", "]").Replace("\r", " ").Replace("\n", " ");

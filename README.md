@@ -1,6 +1,6 @@
 # Silica Field Ranks
 
-**Version 1.3.0 - server-side Silica player ranks, compiled as `Si_Ranks.dll`.**
+**Version 1.4.0 - server-side Silica player ranks, compiled as `Si_Ranks.dll`.**
 
 Players progress through a shared rank ladder using their authoritative current-round game score. Faction-specific names, personal-credit bonuses and FPS squad permissions follow that rank. Progress, penalties and limited seats reset every round; there is no career score.
 
@@ -34,7 +34,7 @@ Defaults below are configurable. Each FPS cap **includes the player's controlled
 | 13 | 7,000 | Major | Major | Brood Lord | 14 | 40% | Any | 1 |
 | 14 | 9,000 | Lieutenant Colonel | Lieutenant Colonel | Hive Guardian | 15 | 45% | Any | 1 |
 | 15 | 12,000 | Colonel | Colonel | Hive Lord | 16 | 50% | Any | 1 |
-| 16 | 15,000 | Field Marshal | Field Marshal | Hive Mind | 20 | 85% | Any | 1 |
+| 16 | 16,000 | Field Marshal | Field Marshal | Hive Mind | 20 | 85% | Any | 1 |
 
 Private has personal control of its own unit, but no permission to recruit AI followers. The two named tank exclusions refer to distinct objects:
 
@@ -81,15 +81,15 @@ Eligibility order is first observed score-check batch, with ascending stable acc
 
 Changing teams releases old seats and queue entries, demotes five positions with a Private floor, preserves strikes/Traitor lockout and establishes a fresh recovery baseline. Initial team assignment and temporarily null teams during reconnect or cleanup are not switches.
 
-If a demotion's destination has an occupied exact seat, the incumbent retains it and the demoted player falls to the nearest available lower tier. This can increase the demotion. Seat-driven lowering alone does not create Traitor status; a punitive target below Private does.
+If a demotion's destination has an occupied exact seat, the incumbent retains it and the demoted player falls to the nearest available lower tier. This can increase the normal demotion but never takes a team switch or admin demotion below Private. Existing Traitor lockout remains through a team switch.
 
 ## Teamkills, Traitor and recovery
 
 Teamkill attribution surrounds the native server `Player.OnTargetDestroyed`: a responsible player-controlled instigator, a distinct friendly victim unit and an actual native `Kills--` delta are required. This includes friendly AI unit kills under the game's classification. Self-kills, environmental/unattributed deaths and structures alone are excluded.
 
-The first qualifying kill counts immediately. Additional kills inside the configurable **10-second cooldown** do not add strikes and do not extend that cooldown. At expiry another strike counts. Strike N demotes N additional rank positions: one, then two, then three, and so on. Admin demotions do not add teamkill strikes.
+The first qualifying kill counts immediately. Additional kills inside the configurable **10-second cooldown** do not add strikes and do not extend that cooldown. At expiry another strike counts. Strike 1 demotes one position and strike 2 demotes two additional positions, both with a Private floor. The third counted strike assigns Traitor regardless of current normal rank. Admin demotions do not add teamkill strikes and cannot go below Private.
 
-Landing exactly on Private is safe. A punitive demotion below it becomes the hidden **Traitor / Deserter / Outcast** tier:
+Team switches and admin demotions never create Traitor status. Only the third counted teamkill strike assigns the hidden **Traitor / Deserter / Outcast** tier:
 
 - Cap 1 and no recruited-unit permissions.
 - No further promotions that round, including admin promotions, team changes and reconnects.
@@ -102,6 +102,14 @@ After a non-Traitor demotion, recovery stores `ScoreOffset = current score - lan
 Example: a 3,200-score Senior Master Sergeant demoted to Master Sergeant has offset 700. Recovering the 500-point gap requires a game score of 3,700; checking 3,200 again does not undo the penalty. Admin promotions waive the requested step and rebase at the awarded tier; later promotions require its next gap.
 
 ## Personal-credit integration
+
+### Higher-ranked player kill reward
+
+Killing an enemy player of a higher rank replaces the normal rank-percentage modifier for that single eligible KoH kill reward. The multiplier is `max(2, victimTier - killerTier)`: tier 1 killing tier 2 gets 2x, and tier 5 killing tier 10 gets 5x. For an original **KoH base kill payout** of 100 credits, the second example pays **500 total**, not an extra 500 plus the ordinary payout. Existing KoH cost/fraction rules still calculate the base; this feature does not multiply the unit purchase price separately.
+
+The victim must actually control or drive the killed unit. Commander-owned AI units do not count as ranked-player victims. The killer follows KoH's authoritative credit attribution, so a credited commander-owned attack can qualify. Native enemy relationships are checked, including alliances. Equal/lower ranks, self-kills, friendly kills, missing player state and Traitor attackers use their ordinary reward rules instead. Bounties stay separate and unchanged.
+
+Rank/name metadata is captured before native death handling can clear the victim's controller. The award is scoped to that death and original payment, validated against the current round/Traitor state, floored and capped to remaining wallet capacity. Only after verifying the actual positive balance increase does it announce: `<rank> <Playername> killed higher ranking <Rank> <playername> and got a <rewarded credits>cr reward!!!`. KoH's private message uses the same paid amount. Zero, failed or unmatched payments do not announce a special reward.
 
 Temporary source-specific runtime transpilers adjust these verified earning sites before their existing payment executes once:
 
@@ -143,6 +151,10 @@ Configure `NativeCategoryRules` and `NativeObjectCategoryOverrides` to refine th
 
 ## Announcements and sound cues
 
+Tier 9 now also announces to all chat in the same format as tiers 15 and 16: Chief Master Sergeant / Sergeant Major / Brood Warden. This includes actual admin promotions and starting commander tier grants. Repeated checks do not repeat an unchanged rank announcement.
+
+Version 1.3.1 omits FPS squad counts from commander promotion announcements; FPS promotion messages retain their cap. Final-tier default and installed threshold are now 16,000. Strikes one and two cannot create Traitor, even if a team switch already reduced the player to Private; strike three does. Reconnects and switches preserve counted strikes, and ignored splash kills cannot advance this threshold.
+
 Automatic and admin promotions to tier 15 (Colonel / Hive Lord) and tier 16 (Field Marshal / Hive Mind) announce to all chat: `<playername> just achieved <rank name> !!`. Each actual crossing is announced; unchanged score checks and occupied queues do not repeat it. If one update reaches both tiers, both achievements are announced while the private promotion message and sound report the final tier once.
 
 Sound cues are private to the affected player, including commanders, through the existing Admin Mod recipient audio stream. Clips are decoded/cached once, queued per recipient, and stopped on round end/unload or disconnect. There is no broadcast audio or disk reading on every promotion.
@@ -158,14 +170,18 @@ Sound cues are private to the affected player, including commanders, through the
 
 The supplied file is named `TK_2.wav`, not `TK2.wav`; configuration uses the existing filename. Reaching Traitor uses only its cue, not both demotion sounds. Ignored teamkills and rejected admin commands make no sound. Starting commander tier 9 uses `Promotion_2.wav`; starting FPS tier 0 is silent. Disable all cues with `Sounds.Enabled = false`, or use an empty filename to disable an individual cue. Missing/invalid files disable only their cue; diagnostics remain behind `/debug`.
 
+Alien promotions use the same four tier groups with `Alien_Promotion_1.wav`, `Alien_Promotion_2.wav`, `Alien_Promotion_3.wav`, and `Alien_Promotion_4.wav`, including `Alien_Promotion_2.wav` for a starting Alien commander. The four filenames are configurable as `Sounds.AlienTier1To4`, `AlienTier5To9`, `AlienTier10To14`, and `AlienTier15To16`. Demotion/Traitor sounds remain shared between factions.
+
 ## Chat commands and logging
+
+`/rank` and `/rank playername` now show only the player's active rank, reward bonus, squad quantity and allowed unit tier, for example: `Davey is Specialist 4, has +6% reward bonus, gets 5 squad units up to light units.` Player-only policies are stated directly; Traitor additionally states that combat rewards are zero. Team, score, role labels, raw object identifiers and integration diagnostics are omitted. Admins can inspect reward/Formation availability with `/debug status` instead.
 
 | Command | Access | Behavior |
 |---|---|---|
-| `/rank` | Player | Show own rank, team, fresh score, rewards and permissions |
+| `/rank` | Player | Show own rank, bonus, squad quantity and allowed types |
 | `/rank playername` | Player | Show another connected player's information |
 | `/promote playername` | Admin Generic power | Promote one step without its score threshold; seats and Traitor lock apply |
-| `/demote playername` | Admin Generic power | Demote one step; below Private becomes Traitor; no teamkill strike |
+| `/demote playername` | Admin Generic power | Demote one step with Private floor; no teamkill strike |
 | `/debug` | Admin Generic power | Toggle Ranks logging |
 | `/debug on` / `/debug off` | Admin Generic power | Enable/disable Ranks logging |
 | `/debug status` | Admin Generic power | Show current logging state |
@@ -207,7 +223,7 @@ dotnet run --project Tests/RankEngineTests.csproj
 dotnet run --project Tests/RewardPatchTests.csproj "-p:ServerRoot=D:\SteamLibrary\steamapps\common\Silica Dedicated Server" -- "D:\SteamLibrary\steamapps\common\Silica Dedicated Server"
 ```
 
-Version 1.3.0 built with zero warnings/errors. **135 engine assertions and 31 offline reward compatibility assertions passed.** The reward harness inspects raw IL from installed DLLs; it does not execute game methods or validate Unity/Mono patch installation. Recorded checks and limitations are in [VALIDATION.md](VALIDATION.md).
+Version 1.4.0 built with zero warnings/errors. **160 engine assertions and 39 offline reward compatibility assertions passed.** The reward harness inspects raw IL from installed DLLs; it does not execute game methods or validate Unity/Mono patch installation. Recorded checks and limitations are in [VALIDATION.md](VALIDATION.md).
 
 Gameplay verification remains user-owned: check startup patch/policy status with `/rank`, commander starting score and names, promotion messages and queues, final-seat exclusivity, rewards/announcements, Traitor reductions, recruitment restrictions and admin overrides, round resets, team switches and reconnect recovery.
 

@@ -8,7 +8,7 @@ using HarmonyLib;
 using SiPlayerRanks;
 
 namespace MelonLoader { public static class MelonLogger { public static void Warning(string s)=>Console.WriteLine(s); public static void Msg(string s)=>Console.WriteLine(s); public static void Error(string s)=>Console.WriteLine(s); } }
-namespace SiPlayerRanks { public enum RewardKind { Kill,Structure,Logistics,Other } public static class RankMod { public static decimal RewardPolicy(long id,RewardKind kind)=>1m; } }
+namespace SiPlayerRanks { public enum RewardKind { Kill,Structure,Logistics,Other } public sealed class RankedKillBonus { public int Multiplier; } public static class RankMod { public static decimal RewardPolicy(long id,RewardKind kind)=>1m; public static RankedKillBonus? HigherRankKill(long killerId,long victimId)=>null; public static bool RankedKillValid(RankedKillBonus bonus)=>true; public static void AnnounceHigherRankKill(RankedKillBonus bonus,int paid){} } }
 internal static class RewardPatchProgram
 {
     private static int assertions;
@@ -77,16 +77,28 @@ internal static class RewardPatchProgram
         Check(RewardPatches.Calculate(100,1.85m,int.MaxValue-10)==10,"overflow saturation");
         Check(RewardPatches.Calculate(100,1m,int.MaxValue)==0,"full balance");
         Check(RewardPatches.Calculate(-100,1.85m,0)==-100,"negative amount untouched");
+        Check(RewardPatches.Calculate(100,5m,0)==500,"higher-rank multiplier replaces ordinary rank percentage");
+        Check(RewardPatches.Calculate(100,5m,int.MaxValue-40)==40,"higher-rank override clamped to actual balance room");
         var koh=Assembly.LoadFrom(Path.Combine(root,"Mods/Si_KingOfTheHill.dll")).GetType("Si_KingOfTheHill.KingOfTheHill")!;
         var add=Get(koh,"AddCredits");Field("addCredits",add);Field("getCredits",koh.GetMethod("GetCredits",BindingFlags.Static|BindingFlags.NonPublic,null,new[]{typeof(long)},null)!);
         foreach(string name in new[]{"OnUnitDestroyed_Reward","OnStructureDestroyed_Reward","GrantZonePresenceReward"})
         {
             var method=Get(koh,name);var original=Read(method);
             var output=RewardPatches.CombatTranspiler(original,method).ToList();
-            Check(output.Count==original.Count+4,name+" surgical insertion");
+            bool kill=name=="OnUnitDestroyed_Reward";
+            Check(output.Count==original.Count+(kill?9:4),name+" surgical insertion");
             Check(output.Count(c=>c.Calls(add))==1,name+" retains exactly one original payment");
-            Check(output.Count(c=>c.operand is MethodInfo m&&m.DeclaringType==typeof(RewardPatches))==1,name+" exactly one multiplier");
+            Check(output.Count(c=>c.operand is MethodInfo m&&m.DeclaringType==typeof(RewardPatches))==(kill?2:1),name+" one multiplier plus kill-only post-payment hook");
             Check(output.Count(c=>c.opcode.Name!.StartsWith("stloc"))==original.Count(c=>c.opcode.Name!.StartsWith("stloc"))+1,name+" updates the amount used by original messages");
+            if(kill)
+            {
+                int pay=output.FindIndex(c=>c.Calls(add));int announce=output.FindIndex(c=>c.operand is MethodInfo m&&m.Name=="KillPaid");
+                Check(announce==pay+4,"announcement runs only after original successful AddCredits");
+                Check(output[announce-1].opcode==OpCodes.Ldarg_0,"post-payment confirmation receives exact victim argument");
+                int modifier=output.FindIndex(c=>c.operand is MethodInfo m&&m.Name=="Kill");
+                Check(output[modifier-1].opcode==OpCodes.Ldarg_0,"modifier receives exact native victim argument");
+                Check(output.Any(c=>c.operand is MethodInfo m&&m.Name=="PayBountyIfApplicable"),"independent bounty call retained");
+            }
         }
         var external=Get(koh,"GrantExternalCredits");var ext=Read(external);
         var modified=RewardPatches.ExternalTranspiler(ext).ToList();
@@ -98,6 +110,13 @@ internal static class RewardPatchProgram
         var verify=Get(typeof(RewardPatches),"Verified");
         Check((bool)verify.Invoke(null,new object[]{logistics.Assembly,reviewedHash})!,"current installed Logistics passes reviewed DLL hash gate");
         Check(!(bool)verify.Invoke(null,new object[]{logistics.Assembly,new string('0',64)})!,"unexpected Logistics DLL hash rejected");
+        string gameHash=(string)typeof(RewardPatches).GetField("GameHash",BindingFlags.Static|BindingFlags.NonPublic)!.GetRawConstantValue()!;
+        Check((bool)verify.Invoke(null,new object[]{typeof(DamageManager).Assembly,gameHash})!,"current game DLL passes death-dispatch review hash gate");
+        var deathDispatcher=typeof(DamageManager).GetMethod("OnDamageReceived",BindingFlags.Instance|BindingFlags.NonPublic,null,new[]{typeof(float),typeof(UnityEngine.GameObject),typeof(byte),typeof(bool)},null)!;
+        var deathIl=Read(deathDispatcher);
+        int targetDeath=deathIl.FindIndex(c=>c.operand is FieldInfo f&&f.DeclaringType==typeof(GameEvents)&&f.Name=="OnTargetDestroyed");
+        int unitDeath=deathIl.FindIndex(c=>c.operand is FieldInfo f&&f.DeclaringType==typeof(GameEvents)&&f.Name=="OnUnitDestroyed");
+        Check(targetDeath>=0&&unitDeath>targetDeath,"death metadata capture needed before target callbacks precede native KoH unit reward");
         var grant=Get(logistics.GetNestedType("KohCredits",BindingFlags.NonPublic)!,"TryGrant");Field("logisticsGrant",grant);
         var due=Get(logistics,"PayDueRewards");var originalDue=Read(due);
         var modifiedDue=RewardPatches.LogisticsChatTranspiler(originalDue,due).ToList();

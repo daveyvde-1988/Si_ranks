@@ -18,6 +18,7 @@ namespace SiPlayerRanks
     internal static class RewardPatches
     {
         private const string KohHash="5377B71A034E065DF76D5A3F595DE733DAF24D9A875DEF9D0C092BCCAAABF8BC";
+        private const string GameHash="33969F93EBBE60C4182E18C590974BCE046BD0F440B7003D888F2E7640B1BCF5";
         // Reviewed installed Logistics 2026-10-13: TryGrant and PayDueRewards remain source
         // identical to the previous reviewed build; grant and announcement IL sites unchanged.
         private const string LogisticsHash="C5799FD0CDB2D1B5330CD165FDC5F5088118565E4D51712A06B17C586BFF3329";
@@ -29,10 +30,28 @@ namespace SiPlayerRanks
         [ThreadStatic] private static int lastLogisticsBase,lastLogisticsPaid;
         [ThreadStatic] private static bool hasLogisticsReceipt;
         private static bool provenanceWarning;
+        private static MethodInfo? deathHook;
+        private static bool deathHookInstalled;
+        private static readonly Dictionary<Unit,DeathCapture> deaths=new();
+        private sealed class DeathCapture
+        {
+            public Unit Victim=null!;
+            public long KillerId;
+            public RankedKillBonus Bonus=null!;
+            public DeathCapture? Previous;
+            public int BeforeBalance,Paid=-1;
+            public bool Announced;
+        }
         public static string Status=>statuses.Count==0?"Reward patches pending":string.Join("; ",statuses.Select(p=>p.Key+": "+p.Value));
 
         public static void Unbind(HarmonyLib.Harmony harmony)
         {
+            if(deathHookInstalled&&deathHook!=null)
+            {
+                try{harmony.Unpatch(deathHook,Helper(nameof(DeathPrefix)));harmony.Unpatch(deathHook,Helper(nameof(DeathFinalizer)));deathHookInstalled=false;}
+                catch(Exception e){RankLog.Warning("Ranks death capture removal failed: "+e.GetBaseException().Message);}
+            }
+            deaths.Clear();
             foreach(var method in installed.ToArray())
             {
                 string transpiler=method.Name=="PayDueRewards"?nameof(LogisticsChatTranspiler):method.Name=="GrantExternalCredits"?nameof(ExternalTranspiler):nameof(CombatTranspiler);
@@ -52,6 +71,7 @@ namespace SiPlayerRanks
             addCredits=Method(koh,"AddCredits",typeof(void),typeof(long),typeof(int));
             getCredits=Method(koh,"GetCredits",typeof(int),typeof(long));
             if(addCredits==null||getCredits==null){Warn("KoH","credit signatures incompatible");return;}
+            BindDeathCapture(harmony);
             Install(harmony,Method(koh,"OnUnitDestroyed_Reward",typeof(void),typeof(Unit),typeof(UnityEngine.GameObject)),"kills",nameof(CombatTranspiler));
             Install(harmony,Method(koh,"OnStructureDestroyed_Reward",typeof(void),typeof(Structure),typeof(UnityEngine.GameObject)),"structures",nameof(CombatTranspiler));
             Install(harmony,Method(koh,"GrantZonePresenceReward",typeof(void),typeof(Player),typeof(int),typeof(string)),"zone presence",nameof(CombatTranspiler));
@@ -68,6 +88,60 @@ namespace SiPlayerRanks
             Install(harmony,due,"Logistics announcement",nameof(LogisticsChatTranspiler));
             if(!installed.Contains(due))return;
             Install(harmony,Method(koh,"GrantExternalCredits",typeof(bool),typeof(long),typeof(int),typeof(string)),"Logistics payment",nameof(ExternalTranspiler));
+        }
+
+        private static void BindDeathCapture(HarmonyLib.Harmony harmony)
+        {
+            if(deathHookInstalled)return;
+            if(!Verified(typeof(DamageManager).Assembly,GameHash)){Warn("higher-rank kills","game DLL changed; death capture disabled until reviewed");return;}
+            deathHook=typeof(DamageManager).GetMethod("OnDamageReceived",BindingFlags.Instance|BindingFlags.NonPublic,null,new[]{typeof(float),typeof(UnityEngine.GameObject),typeof(byte),typeof(bool)},null);
+            if(deathHook==null||deathHook.ReturnType!=typeof(void)){Warn("higher-rank kills","death dispatcher signature incompatible");return;}
+            try
+            {
+                // Reviewed dispatcher: virtual Owner.OnDestroyed and OnTargetDestroyed callbacks
+                // precede OnUnitDestroyed. Capture direct control and rank metadata before any of
+                // them can clear control or change a rank; finalizer removes the exact death scope.
+                harmony.Patch(deathHook,prefix:new HarmonyMethod(typeof(RewardPatches),nameof(DeathPrefix)),finalizer:new HarmonyMethod(typeof(RewardPatches),nameof(DeathFinalizer)));
+                deathHookInstalled=true;statuses["higher-rank kills"]="death capture active";
+            }
+            catch(Exception e){Warn("higher-rank kills","death capture unavailable: "+e.GetBaseException().Message);}
+        }
+        private static Player? DirectPlayer(Unit? unit)
+        {
+            if(unit==null)return null;
+            var direct=unit.ControlledBy;
+            if(direct!=null&&direct.ControlledUnit==unit)return direct;
+            var driver=unit.Driver;
+            if(driver==null)return null;
+            direct=driver.ControlledBy;
+            return direct!=null&&direct.ControlledUnit==driver?direct:null;
+        }
+        private static void DeathPrefix(DamageManager __instance,float damage,UnityEngine.GameObject instigator,out DeathCapture? __state)
+        {
+            __state=null;
+            try
+            {
+                if(damage==0f||__instance.Health>0f||!Game.GetIsServer()||instigator==null)return;
+                var victim=__instance.Owner as Unit;
+                var attacker=GameFuncs.GetBaseGameObject(instigator,true);
+                // Match KoH attribution exactly. A commander-owned attacker may legitimately
+                // earn KoH credits; only the VICTIM must be a directly controlled FPS unit.
+                var killer=attacker!=null?attacker.NetworkComponent?.OwnerPlayer:null;
+                var killed=DirectPlayer(victim);
+                if(victim==null||attacker==null||killer==null||killed==null||killer==killed||killer.Team==null||killed.Team==null||victim.Team==null||!Team.GetTeamsAreEnemy(killer.Team,victim.Team)||!Team.GetTeamsAreEnemy(killer.Team,killed.Team))return;
+                long killerId=unchecked((long)killer.PlayerID.SteamID.m_SteamID),victimId=unchecked((long)killed.PlayerID.SteamID.m_SteamID);
+                if(killerId==0||victimId==0||killerId==victimId)return;
+                var bonus=RankMod.HigherRankKill(killerId,victimId);if(bonus==null)return;
+                deaths.TryGetValue(victim,out var previous);
+                __state=new DeathCapture{Victim=victim,KillerId=killerId,Bonus=bonus,Previous=previous};deaths[victim]=__state;
+            }
+            catch(Exception e){Warn("higher-rank kills","snapshot failed: "+e.GetBaseException().Message);}
+        }
+        private static void DeathFinalizer(DeathCapture? __state)
+        {
+            if(__state==null)return;
+            if(deaths.TryGetValue(__state.Victim,out var current)&&ReferenceEquals(current,__state))
+            {if(__state.Previous==null)deaths.Remove(__state.Victim);else deaths[__state.Victim]=__state.Previous;}
         }
 
         private static Type? Find(string name)=>AppDomain.CurrentDomain.GetAssemblies().Select(a=>a.GetType(name,false)).FirstOrDefault(t=>t!=null);
@@ -115,7 +189,31 @@ namespace SiPlayerRanks
             try{return Calculate(amount,RankMod.RewardPolicy(id,kind),(int)getCredits!.Invoke(null,new object[]{id})!);}
             catch(Exception e){Warn("policy","calculation unavailable: "+e.GetBaseException().Message);return amount;}
         }
-        private static int Kill(long id,int amount)=>Scale(id,amount,RewardKind.Kill);
+        private static int Kill(long id,int amount,Unit victim)
+        {
+            if(amount>0&&victim!=null&&deaths.TryGetValue(victim,out var death)&&death.KillerId==id&&death.Paid<0&&RankMod.RankedKillValid(death.Bonus))
+            {
+                try
+                {
+                    death.BeforeBalance=(int)getCredits!.Invoke(null,new object[]{id})!;
+                    death.Paid=Calculate(amount,death.Bonus.Multiplier,death.BeforeBalance);
+                    return death.Paid;
+                }
+                catch(Exception e){Warn("higher-rank kills","override calculation failed: "+e.GetBaseException().Message);}
+            }
+            return Scale(id,amount,RewardKind.Kill);
+        }
+        private static void KillPaid(long id,int paid,Unit victim)
+        {
+            if(paid<=0||victim==null||!deaths.TryGetValue(victim,out var death)||death.KillerId!=id||death.Paid!=paid||death.Announced)return;
+            try
+            {
+                int balance=(int)getCredits!.Invoke(null,new object[]{id})!;
+                if((long)balance-death.BeforeBalance!=paid)return;
+                death.Announced=true;RankMod.AnnounceHigherRankKill(death.Bonus,paid);
+            }
+            catch(Exception e){RankLog.Warning("Ranks higher-rank kill announcement failed: "+e.GetBaseException().Message);}
+        }
         private static int Structure(long id,int amount)=>Scale(id,amount,RewardKind.Structure);
         private static int Zone(long id,int amount)=>Scale(id,amount,RewardKind.Other);
 
@@ -185,7 +283,20 @@ namespace SiPlayerRanks
             var id=code[site-2];int idLocal=LocalIndex(id);
             Require(idLocal>=0?__originalMethod.GetMethodBody()!.LocalVariables[idLocal].LocalType==typeof(long):id.opcode==OpCodes.Call&&id.operand is MethodInfo m&&m.Name=="GetPlayerSteamId"&&m.ReturnType==typeof(long),"unrecognized account-id operand");
             string helper=__originalMethod.Name=="OnUnitDestroyed_Reward"?nameof(Kill):__originalMethod.Name=="OnStructureDestroyed_Reward"?nameof(Structure):__originalMethod.Name=="GrantZonePresenceReward"?nameof(Zone):throw new InvalidOperationException("unrecognized reward handler");
-            InsertAt(code,site-1,new List<CodeInstruction>{new(OpCodes.Dup),new(amount.opcode,amount.operand),new(OpCodes.Call,Helper(helper)),LocalInstruction(true,local,amount.operand)});
+            var modifier=new List<CodeInstruction>{new(OpCodes.Dup),new(amount.opcode,amount.operand)};
+            bool kill=helper==nameof(Kill);
+            if(kill)modifier.Add(new CodeInstruction(OpCodes.Ldarg_0));
+            modifier.Add(new CodeInstruction(OpCodes.Call,Helper(helper)));modifier.Add(LocalInstruction(true,local,amount.operand));
+            InsertAt(code,site-1,modifier);
+            if(kill)
+            {
+                // Execute only after the original void AddCredits returned successfully; a thrown
+                // payment skips this code through KoH's existing exception handler. The following
+                // private message uses the same adjusted local and bounty code remains untouched.
+                int paidSite=CreditSite(code);
+                Require(idLocal>=0,"kill account-id must remain a local");
+                code.InsertRange(paidSite+1,new[]{LocalInstruction(false,idLocal,id.operand),LocalInstruction(false,local,amount.operand),new CodeInstruction(OpCodes.Ldarg_0),new CodeInstruction(OpCodes.Call,Helper(nameof(KillPaid)))});
+            }
             return code;
         }
         internal static IEnumerable<CodeInstruction> ExternalTranspiler(IEnumerable<CodeInstruction> instructions)

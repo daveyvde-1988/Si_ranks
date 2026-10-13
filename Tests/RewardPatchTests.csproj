@@ -5,5 +5,6 @@
     <Reference Include="$(ServerRoot)/MelonLoader/net35/0Harmony.dll"/>
     <Reference Include="$(ServerRoot)/Silica_Data/Managed/SilicaCore.dll"/>
     <Reference Include="$(ServerRoot)/Silica_Data/Managed/UnityEngine.CoreModule.dll"/>
+    <Reference Include="$(ServerRoot)/Silica_Data/Managed/com.rlabrecque.steamworks.net.dll"/>
   </ItemGroup>
 </Project>

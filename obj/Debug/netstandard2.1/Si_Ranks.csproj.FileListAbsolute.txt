@@ -8,3 +8,4 @@ D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\bi
 D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\bin\Debug\netstandard2.1\Si_Ranks.pdb
 D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Debug\netstandard2.1\Si_Ranks.dll
 D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Debug\netstandard2.1\Si_Ranks.pdb
+D:\SteamLibrary\steamapps\common\Silica Dedicated Server\Silica-1283\si_ranks\obj\Debug\netstandard2.1\Si_Ranks.sourcelink.json

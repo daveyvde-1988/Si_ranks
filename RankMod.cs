@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 using SilicaAdminMod;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(SiPlayerRanks.RankMod), "Silica Field Ranks", "1.3.0", "Local")]
+[assembly: MelonInfo(typeof(SiPlayerRanks.RankMod), "Silica Field Ranks", "1.4.0", "Local")]
 [assembly: MelonGame("Bohemia Interactive", "Silica")]
 [assembly: MelonOptionalDependencies("Admin Mod", "Si_Formation")]
 
@@ -70,6 +70,10 @@ namespace SiPlayerRanks
             Bind();
         }
         internal static decimal RewardPolicy(long id,RewardKind kind)=>Ready?engine!.Policy(id).Multiplier(kind):1m;
+        internal static RankedKillBonus? HigherRankKill(long killerId,long victimId)=>Ready?engine!.HigherRankKill(killerId,victimId):null;
+        internal static bool RankedKillValid(RankedKillBonus bonus)=>Ready&&bonus.RoundToken==engine!.Round.Token&&!engine.Policy(bonus.KillerId).Traitor;
+        internal static void AnnounceHigherRankKill(RankedKillBonus bonus,int paid)
+        {if(Ready&&paid>0)HelperMethods.SendChatMessageToAll("[Ranks] ",bonus.Announcement(paid));}
         public override void OnSceneWasLoaded(int index,string name)=>Bind();
         public override void OnSceneWasInitialized(int index,string name)=>Bind();
         private static void Bind()
@@ -239,6 +243,7 @@ namespace SiPlayerRanks
                     default:Tell(Id(caller),"Usage: /debug [on|off|status] (Ranks logging).");return;
                 }
                 Tell(Id(caller),"Ranks debug logging: "+(RankLog.Enabled?"ON":"OFF")+".");
+                if(query.Equals("status",StringComparison.OrdinalIgnoreCase))Tell(Id(caller),RewardPatches.Status+" "+formation.Describe(Id(caller)));
                 if(RankLog.Enabled&&query.ToLowerInvariant()!="status")
                 {
                     RankLog.Info("Ranks debug logging enabled. "+RewardPatches.Status);
@@ -259,13 +264,7 @@ namespace SiPlayerRanks
             if(command=="/rank")
             {
                 // A display query cannot trigger promotions or establish queue priority.
-                var state=engine!.Round.Players[target.Value];int score=state.Score;
-                try
-                {
-                    state.Score=player.Score;
-                    Tell(Id(caller),engine.Describe(target.Value)+" "+RewardPatches.Status+" "+formation.Describe(target.Value));
-                }
-                finally{state.Score=score;}
+                Tell(Id(caller),engine!.Describe(target.Value));
                 return;
             }
             Observe(player,false,true);

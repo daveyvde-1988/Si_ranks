@@ -1,5 +1,21 @@
 # Validation and installation — 13 October 2026
 
+## Current update: 1.4.0 compact rank and higher-player kill rewards
+
+Release build passed with zero warnings/errors. **160 engine assertions and 39 offline reward compatibility assertions passed.** Pure-state checks cover both multiplier examples, invalid/same-team/Traitor/self/lower-rank cases, immutable rank/name snapshots, compact rank formatting and tier9 commander announcement deduplication. Raw current-DLL IL checks cover the single original kill payment, extra victim argument, post-payment receipt check and unchanged private/bounty flow. Current SilicaCore damage/death order and enemy/controller APIs were inspected; these offline checks do not execute Unity damage handling or install runtime patches.
+
+Source, configuration and prior installed DLL backup: `Backups/FieldRanks-killreward-20261013-154943/`. No configuration edits were required. Unit kill override uses original KoH calculated base payout and `max(2, victimTier - killerTier)`, replacing the percentage for one payout; actual positive credited amount is announced. Current round and Traitor state override stale captures. Diagnostics moved from /rank into admin /debug status. No other mod files were changed and no server was started/stopped.
+
+Gameplay checks remain user-owned: player-controlled victim death capture, enemy/allied teams, commander-owned attacker attribution, the two multiplier examples and capped-credit announcement, AI victim exclusion, original bounty unchanged, compact /rank and tier9 achievement messages.
+
+## Current update: 1.3.1 third-strike Traitor and Alien sound cues
+
+Release build passed with zero warnings/errors; **150 engine and 31 reward compatibility assertions passed**. Added regression coverage for a switch to Private followed by two safe strikes then Traitor on strike three; cooldown ignores; two-strike preservation across reconnect/team change; admin Private floor; high-rank third-strike Traitor; commander messages omitting caps while FPS messages retain them; and all four Alien cue groups. Final-tier checks use 16,000.
+
+All four actual Alien WAVs decoded successfully in the offline sound harness (50/49/58/71 packets); queued playback delivered the 228 packets to the intended fake recipient. Previous six-file conversion/reset checks passed too. This is not audible gameplay verification.
+
+Backup of old DLL, source and configuration: `Backups/FieldRanks-strikes-20261013-123813/`. Updated the installed final threshold and added four Alien filenames, preserving other rank/configuration settings. Only the third counted teamkill strike can assign Traitor; switches and admin demotions floor at Private, while existing Traitor status remains locked until round reset. No server was started or stopped. User should relaunch normally and test the reported sequence, commander chat and live Alien audio.
+
 ## Current update: 1.3.0 rank rewards, unit bans, announcements and sounds
 
 Release build passed with zero warnings/errors. **135 engine assertions and 31 offline reward compatibility assertions passed.** Added engine coverage for commander tier bonuses, all-tier harvester exclusions, native category changes, grouped sound selection, one cue per aggregate promotion, no repeated cues for unchanged/ignored state, Traitor precedence, top-tier global announcements, disabled cues and filename validation. The current Logistics DLL changed since the original integration; its PayDueRewards/TryGrant source and payout/chat IL were re-inspected and confirmed compatible before updating the reviewed hash.

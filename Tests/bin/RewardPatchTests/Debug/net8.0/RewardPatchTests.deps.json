@@ -9,6 +9,7 @@
       "RewardPatchTests/1.0.0": {
         "dependencies": {
           "0Harmony": "2.10.2.0",
+          "com.rlabrecque.steamworks.net": "0.0.0.0",
           "SilicaCore": "0.0.0.0",
           "UnityEngine.CoreModule": "0.0.0.0"
         },
@@ -21,6 +22,14 @@
           "0Harmony.dll": {
             "assemblyVersion": "2.10.2.0",
             "fileVersion": "2.10.2.0"
+          }
+        }
+      },
+      "com.rlabrecque.steamworks.net/0.0.0.0": {
+        "runtime": {
+          "com.rlabrecque.steamworks.net.dll": {
+            "assemblyVersion": "0.0.0.0",
+            "fileVersion": "0.0.0.0"
           }
         }
       },
@@ -251,14 +260,6 @@
       "UnityEngine.TerrainPhysicsModule/0.0.0.0": {
         "runtime": {
           "UnityEngine.TerrainPhysicsModule.dll": {
-            "assemblyVersion": "0.0.0.0",
-            "fileVersion": "0.0.0.0"
-          }
-        }
-      },
-      "com.rlabrecque.steamworks.net/0.0.0.0": {
-        "runtime": {
-          "com.rlabrecque.steamworks.net.dll": {
             "assemblyVersion": "0.0.0.0",
             "fileVersion": "0.0.0.0"
           }
@@ -853,6 +854,11 @@
       "serviceable": false,
       "sha512": ""
     },
+    "com.rlabrecque.steamworks.net/0.0.0.0": {
+      "type": "reference",
+      "serviceable": false,
+      "sha512": ""
+    },
     "SilicaCore/0.0.0.0": {
       "type": "reference",
       "serviceable": false,
@@ -994,11 +1000,6 @@
       "sha512": ""
     },
     "UnityEngine.TerrainPhysicsModule/0.0.0.0": {
-      "type": "reference",
-      "serviceable": false,
-      "sha512": ""
-    },
-    "com.rlabrecque.steamworks.net/0.0.0.0": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""
